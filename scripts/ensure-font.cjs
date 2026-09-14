@@ -22,6 +22,8 @@ const SRC_CANDIDATES = [
   'C:/Windows/Fonts/msyh.ttc', // 微软雅黑（ttc 集合，subset-font 可能不支持）
   '/System/Library/Fonts/PingFang.ttc',
   '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+  // CI（ubuntu-latest）：fonts-droid-fallback 包提供的单面 TTF（subset-font 不支持 .ttc 集合）
+  '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
 ];
 
 if (fs.existsSync(OUT)) {
@@ -53,6 +55,8 @@ console.log(`[ensure-font] 字体子集缺失，从 ${available} 生成…`);
 try {
   execFileSync(process.execPath, [path.join(__dirname, 'subset-font.cjs')], {
     stdio: 'inherit',
+    // 把探测到的字体源透传给 subset-font.cjs（其默认值是 Windows SimHei）
+    env: { ...process.env, SIF_FONT_SRC: available },
   });
 } catch (e) {
   console.error('[ensure-font] ✗ 生成失败：', e.message);

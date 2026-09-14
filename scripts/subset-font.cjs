@@ -24,7 +24,9 @@ const subsetFont = require('subset-font');
 const fs = require('fs');
 const path = require('path');
 
-const SRC = 'C:/Windows/Fonts/simhei.ttf';
+// 源字体可被 SIF_FONT_SRC 覆盖（CI 用 Ubuntu 的 DroidSansFallbackFull.ttf；
+// ensure-font.cjs 会把探测到的候选路径透传过来）
+const SRC = process.env.SIF_FONT_SRC || 'C:/Windows/Fonts/simhei.ttf';
 const OUT = path.join(__dirname, '..', 'src', 'assets', 'fonts', 'SimHei-subset.ttf');
 const SRC_DIR = path.join(__dirname, '..', 'src');
 const MINIMAL = process.argv.includes('--minimal');
