@@ -1,0 +1,18 @@
+---
+name: Documentation / Q&A
+about: 文档不清晰 / 使用上的提问
+title: "[Docs / Question] "
+labels: question
+---
+
+## 哪里 / Where
+
+<!-- 哪个文件 / 哪个视图 / 哪个 command 没有讲清楚？ -->
+
+## 期望 / Expected
+
+<!-- 哪种说明能帮到你？ -->
+
+## 已尝试 / Tried
+
+<!-- 看了哪些文件 / 哪些代码 / 哪些讨论？ -->

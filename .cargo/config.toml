@@ -1,0 +1,21 @@
+# SIF Studio / 联锁工坊 — Cargo 配置
+# 强制指定 MSVC 工具链绝对路径，绕过沙盒 PATH 注入失败
+# （Visual Studio 18 Community + MSVC 14.51.36231 + Windows 11 SDK 26100）
+
+[build]
+# 沙盒内存紧，rustc-LLVM 在大 crate（如 windows-rs / tauri-utils / cargo_toml）
+# 会 OOM + STATUS_STACK_BUFFER_OVERRUN。jobs=1 串行编，单进程峰值内存可控。
+jobs = 1
+
+[target.x86_64-pc-windows-msvc]
+# 显式 linker 让 rustc 不靠 PATH 探测
+linker = "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.51.36231\\bin\\Hostx64\\x64\\link.exe"
+
+# cc-rs / build scripts 需要 cl.exe + INCLUDE + LIB
+# (Windows MSVC target 不直接用 [env]，以下传给所有 build.rs 的子进程)
+[env]
+CC_x86_64_pc_windows_msvc = "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.51.36231\\bin\\Hostx64\\x64\\cl.exe"
+CXX_x86_64_pc_windows_msvc = "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.51.36231\\bin\\Hostx64\\x64\\cl.exe"
+AR_x86_64_pc_windows_msvc = "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.51.36231\\bin\\Hostx64\\x64\\lib.exe"
+INCLUDE = "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.51.36231\\include;C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\ucrt;C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\um;C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\shared"
+LIB = "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.51.36231\\lib\\x64;C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\ucrt\\x64;C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\um\\x64"

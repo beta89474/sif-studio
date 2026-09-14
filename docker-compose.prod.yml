@@ -1,0 +1,62 @@
+# SIF Studio（联锁工坊）生产编排 —— Caddy 自动 HTTPS 反代
+#
+# 与开发用 docker-compose.yml 的区别：
+#   - 应用端口不直接发布到宿主，只在 compose 内网暴露给 Caddy；
+#   - Caddy 占 80/443，自动申请并续期 HTTPS 证书；
+#   - 会话 cookie 自动加 Secure（SIF_COOKIE_SECURE=1）。
+#
+# 使用：
+#   1) DNS：把你的域名 A/AAAA 记录指向本机，放行 80/443（TCP）与 443/UDP（HTTP/3）
+#   2) 在本文件同目录准备环境变量（可写入 .env，compose 会自动读取）：
+#        SIF_DOMAIN=sif.example.com
+#        SIF_ADMIN_TOKEN=换成一段足够长的随机串      # 留空则备份/恢复端点关闭
+#   3) docker compose -f docker-compose.prod.yml up -d --build
+#   4) 浏览器打开 https://sif.example.com，首个注册用户自动认领组织 1
+#
+# 证书与申请状态保存在 caddy_data 卷；升级时不要删除该卷，否则会重新申请。
+
+services:
+  sif-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sif-studio:latest
+    container_name: sif-studio
+    restart: unless-stopped
+    # 不做宿主端口映射：仅 compose 内网可达，公网入口统一走 Caddy。
+    expose:
+      - "8080"
+    environment:
+      SIF_ADMIN_TOKEN: ${SIF_ADMIN_TOKEN:-}
+      # 前端已经是 HTTPS，会话 cookie 必须带 Secure
+      SIF_COOKIE_SECURE: "1"
+      # 服务只接受来自 Caddy 的流量，可信其注入的 X-Real-IP/X-Forwarded-For
+      SIF_TRUST_PROXY: "1"
+      # 置 1 关闭公开注册（仅接受邀请链接注册），默认开放
+      SIF_INVITE_ONLY: ${SIF_INVITE_ONLY:-0}
+      DATABASE_URL: sqlite:///data/studio.db?mode=rwc
+    volumes:
+      - sif-data:/data
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: sif-caddy
+    restart: unless-stopped
+    depends_on:
+      - sif-studio
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      # 未设置 SIF_DOMAIN 时直接报错退出，避免 Caddy 用空域名起服务
+      SIF_DOMAIN: ${SIF_DOMAIN:?请在环境变量或 .env 中设置 SIF_DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  sif-data:
+  caddy_data:
+  caddy_config:

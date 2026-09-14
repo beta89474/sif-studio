@@ -1,0 +1,34 @@
+{
+  "name": "sif-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "联锁逻辑图与仪表台账的在线工作台 — SIF Studio / 联锁工坊",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "font:subset": "node scripts/subset-font.cjs",
+    "font:verify": "node scripts/verify-font-coverage.cjs",
+    "prebuild": "node scripts/ensure-font.cjs",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-vue-next": "^0.378.0",
+    "pdfmake": "^0.3.11",
+    "pinia": "^2.1.7",
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@vitejs/plugin-vue": "^5.0.4",
+    "@vue/tsconfig": "^0.5.1",
+    "pdf-poppler": "^0.2.3",
+    "pdfjs-dist": "^4.7.76",
+    "subset-font": "^2.7.0",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.10",
+    "vue-tsc": "^2.0.13"
+  }
+}

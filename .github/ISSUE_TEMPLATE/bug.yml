@@ -1,0 +1,39 @@
+---
+name: Bug report
+about: 反馈 bug —— 帮助开发者定位与修复
+title: "[Bug] "
+labels: bug
+---
+
+## 现象 / What happened
+
+<!-- 简洁描述 bug，例如：SifDashboard 「关联仪表」弹窗关闭后表格不清空 -->
+
+## 复现步骤 / Repro steps
+
+1. 
+2. 
+3. 
+
+## 期望 / Expected
+
+<!-- 应该发生什么 -->
+
+## 实际 / Actual
+
+<!-- 实际发生什么 -->
+
+## 截图 / Logs
+
+<!-- 如果有 UI bug，截一张图；如果有崩溃，贴 console 日志 -->
+
+## 环境 / Environment
+
+- OS: [ ] Windows 11 [ ] macOS 14 [ ] Ubuntu 22.04 [ ] 其他 ___
+- SIF Studio 版本: `0.1.x`（Help → About 查）
+- Rust / Node 版本（开发模式才有）：`rustc --version` / `node --version`
+- 数据规模：仪表 N 条、SIF N 条、图 N 张
+
+## 重要程度 / Severity
+
+[ ] 普通（功能不可用） [ ] 严重（数据丢失 / 安全） [ ] 一般（小毛病）

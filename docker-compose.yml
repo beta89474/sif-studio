@@ -1,0 +1,31 @@
+# SIF Studio（联锁工坊）单机编排
+#
+# 首次使用：
+#   1. cp .env.example .env 后填入 SIF_ADMIN_TOKEN（也可先不填，备份/恢复
+#      端点会保持关闭）
+#   2. docker compose up -d --build
+#   3. 浏览器打开 http://localhost:8080，首个注册用户自动认领组织 1
+#
+# 数据落在命名卷 sif-data（容器内 /data），升级镜像不丢库。
+
+services:
+  sif-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sif-studio:latest
+    container_name: sif-studio
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # 留空（默认）= 管理端点 404 关闭；设置后启用 /api/admin/backup|restore
+      SIF_ADMIN_TOKEN: ${SIF_ADMIN_TOKEN:-}
+      # 反向代理走 HTTPS 时置 1，给会话 cookie 加 Secure
+      SIF_COOKIE_SECURE: ${SIF_COOKIE_SECURE:-0}
+      DATABASE_URL: sqlite:///data/studio.db?mode=rwc
+    volumes:
+      - sif-data:/data
+
+volumes:
+  sif-data:

@@ -1,0 +1,66 @@
+# SIF Studio CI —— 后端 Rust 测试 + 前端类型检查/构建
+#
+# sqlx 使用 runtime 查询（无 query! 宏），SQLite 走 libsqlite3-sys 的 bundled
+# 特性（编译期自带 amalgamation 源码），因此无需预置系统 sqlite，也不需要
+# DATABASE_URL；但需要 C 编译器（ubuntu-latest 自带 gcc）。
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  backend:
+    name: Backend · cargo test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry & target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: server
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Build
+        run: cargo build --locked
+
+      - name: Run tests
+        run: cargo test --locked
+
+      - name: Clippy (warnings allowed)
+        run: cargo clippy --all-targets -- -A warnings
+        continue-on-error: true
+
+  frontend:
+    name: Frontend · npm build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check & build (vue-tsc + vite)
+        run: npm run build

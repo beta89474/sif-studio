@@ -1,0 +1,34 @@
+MIT License
+
+Copyright (c) 2026 SIF Studio Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+附加说明 / Additional notes (非法律条款 / Not legally binding):
+
+- 本软件遵循 IEC 61511-1:2016 / GB/T 21109.1-2007 / ISA-5.1 & 5.2 / GB/T 50770-2013
+  等公开标准的方法论，但**不附任何形式的工程资质认证**。
+- 工程使用前请按当地法规走 SIL 验算 / HAZOP / LOPA 评审等流程，
+  软件输出仅作辅助，不得作为唯一依据。
+- 项目维护者不为工程事故负责；自动化系统的最终安全责任在业主 / 运维单位。
+
+This software adheres to the methodology of standards including IEC 61511-1:2016,
+GB/T 21109.1-2007, ISA-5.1 & 5.2, and GB/T 50770-2013, but is NOT certified.
+Users must complete formal SIL verification / HAZOP / LOPA reviews per local
+regulations. The maintainers are not liable for engineering incidents.

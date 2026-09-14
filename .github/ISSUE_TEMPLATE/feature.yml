@@ -1,0 +1,24 @@
+---
+name: Feature request
+about: 提议新功能 —— 描述痛点与期望
+title: "[Feature] "
+labels: enhancement
+---
+
+## 痛点 / Pain point
+
+<!-- 谁、什么时候、因为什么会痛苦？ -->
+
+## 期望 / Expected
+
+<!-- 你期望软件做什么？ -->
+
+## 参考 / Reference
+
+<!-- IEC 61511 / ISA-5.x / GB/T 21109 / GB/T 50770 / 其他标准？同类软件（如 SmartPlant / Aveva / Intergraph）类似能力？ -->
+
+## 可选 / Optional
+
+- 优先级 / Priority: [ ] 必须 [ ] 重要 [ ] 锦上添花
+- 与 Roadmap 的关系: M2 / M3 / M4 / 新增 ___
+- 愿意参与实现吗？[ ] 是 [ ] 否

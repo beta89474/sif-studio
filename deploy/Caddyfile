@@ -1,0 +1,23 @@
+# SIF Studio 生产反向代理示例（Caddy 2）
+#
+# 自动 HTTPS：Caddy 会向 Let's Encrypt / ZeroSSL 自动申请并续期证书，
+# 前提：{$SIF_DOMAIN} 的 A/AAAA 记录已指向本机，且本机 80/443 可从公网访问。
+#
+# 本机临时验证（不申请证书）可把站点地址改成 :80 或 http://{$SIF_DOMAIN}。
+
+{$SIF_DOMAIN} {
+	encode gzip
+
+	# 应用容器在 compose 内网监听 8080；上传/恢复请求体上限由应用侧
+	# DefaultBodyLimit 控制（管理端点 200 MiB），Caddy 默认透传不另限。
+	#
+	# 显式写入 X-Real-IP = Caddy 看到的直连对端（真实客户端 IP）。
+	# 应用仅在 SIF_TRUST_PROXY=1 时采信此头；XFF 由 Caddy 自动追加，
+	# 应用取其末跳，客户端伪造的 XFF 首段不会被采信。
+	reverse_proxy sif-studio:8080 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	# 安全响应头由应用 security_headers 中间件统一下发，此处不重复设置，
+	# 以免两边策略漂移。
+}

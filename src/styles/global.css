@@ -1,0 +1,652 @@
+/* ============================================================================
+ * SIF Studio 全局样式 — Industrial Drafting Style v1.0
+ * 遵循：ANSI/ISA 5.1-2024 / ISO 3098 / ISO 7200 / GB/T 14691-1993 /
+ *      GB/T 18135-2008 / GB/T 50770-2013
+ * 详见 docs/STYLE-GUIDE.md
+ *
+ * 设计原则：
+ *   1. 圆角 ≤ 2px（除 chip/SIL 徽章）
+ *   2. 线宽 1 / 1.5 / 2 px，相邻 ≥ 2:1（GB/T 18135）
+ *   3. 零阴影 / 零渐变 / 零模糊 / 零 emoji
+ *   4. 数字 / 位号 / ID / 路径 → 等宽罗马字（Consolas/MONOTXT）
+ *   5. 标题 → 黑体；正文 → 罗马字 + 仿宋
+ * ========================================================================== */
+
+:root {
+  /* ---------- 颜色（与 ISA 5.1 兼容） ---------- */
+  /* 中性：纸面与油墨 */
+  --ink-1:    #0f141a;
+  --ink-2:    #3a4452;
+  --ink-3:    #6b7280;
+  --ink-4:    #9aa3af;
+  --paper:    #ffffff;
+  --paper-2:  #f7f8fa;
+  --paper-3:  #f1f3f6;
+
+  /* 描线 */
+  --rule:     #1a1f26;
+  --rule-2:   #c5cbd3;
+  --rule-3:   #e6e9ee;
+
+  /* 5 色语义（与 ISA 5.1 颜色编码 + M0 编辑器共用） */
+  --acc:      #1f4e79;  /* 检测 / 仪表（蓝灰）= 主信号 */
+  --acc-bg:   #e6eef6;
+  --blk:      #0f141a;  /* 逻辑（黑）= 处理 / 解算 */
+  --blk-bg:   #f1f3f6;
+  --fin:      #a8342a;  /* 最终 / 安全（砖红）= 紧急动作 */
+  --fin-bg:   #fbeae6;
+  --warn:     #b3541e;  /* 旁路 / 允许（琥珀）= 警告 / 条件 */
+  --warn-bg:  #fbeedb;
+  --reset:    #5b21b6;  /* 手动复位（紫） */
+  --sel:      #d21f8f;  /* 选中（品红）— 与 M0 编辑器共用 */
+
+  /* 验证状态 */
+  --ok:       #1f7a44;
+  --ok-bg:    #e7f1ea;
+  --err:      #9b1c1c;
+  --err-bg:   #f7e3e3;
+
+  /* SIL 等级（按严重度递进，绿→黄→橙→红） */
+  --sil-na:   #9aa3af;
+  --sil-a:    #4d9b6e;
+  --sil-b:    #c29218;
+  --sil-c:    #c75a2a;
+  --sil-d:    #9b1c1c;
+  --sil-na-bg:#f1f3f6;
+  --sil-a-bg: #e7f1ea;
+  --sil-b-bg: #fbf2d9;
+  --sil-c-bg: #fbe1cf;
+  --sil-d-bg: #f7e3e3;
+
+  /* ---------- 字族 ---------- */
+  --font-mono:   "Consolas", "MONOTXT", "Courier New", monospace;
+  --font-roman:  "ISOCPEUR", "Arial Narrow", Arial, Helvetica, sans-serif;
+  --font-cn:     "FangSong_GB2312", "FangSong", "STFangsong", "仿宋",
+                 "Microsoft YaHei", "PingFang SC", sans-serif;
+  --font-title:  "Arial Black", "黑体", "SimHei", "Microsoft YaHei", sans-serif;
+
+  /* ---------- 字高（对应 ISO 3098 / GB/T 14691 序列 2.5/3.5/5/7/10/14 mm）---------- */
+  --fs-micro: 11px;
+  --fs-xs:    12px;
+  --fs-sm:    13px;
+  --fs-md:    15px;
+  --fs-lg:    18px;
+  --fs-xl:    22px;
+  --fs-huge:  32px;
+
+  /* 行距（GB/T 18135：≥ 1.5 倍字高） */
+  --lh-tight:  1.2;
+  --lh-normal: 1.5;
+  --lh-loose:  1.8;
+
+  /* ---------- 线宽（GB/T 18135 序列按 96 dpi 折算） ---------- */
+  --rule-hair: 0.5px;
+  --rule-fine: 1px;
+  --rule-mid:  1.5px;
+  --rule-bold: 2px;
+
+  /* ---------- 间距（4 / 8 网格） ---------- */
+  --s-0: 0;
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+
+  /* ---------- 圆角 ---------- */
+  --r-0: 0;
+  --r-1: 2px;  /* 仅 chip / SIL 徽章 */
+
+  /* ---------- 网格背景（可选暗示） ---------- */
+  --grid: rgba(15, 20, 26, 0.04);
+
+  /* ---------- 阴影（禁用） ---------- */
+  --shadow-none: none;
+
+  /* 兼容别名（保留旧 token 名以防 TS 类型 break） */
+  --acc-fill:   var(--acc-bg);
+  --acc-stroke: var(--acc);
+  --acc-text:   #14395f;
+  --acc-band:   var(--acc);
+  --blk-fill:   var(--paper);
+  --blk-stroke: var(--rule);
+  --blk-text:   var(--ink-1);
+  --blk-band:   var(--ink-2);
+  --fin-fill:   var(--fin-bg);
+  --fin-stroke: var(--fin);
+  --fin-text:   #8f2b20;
+  --fin-band:   var(--fin);
+  --wire-result: #c0271e;
+  --warn-fill:  var(--warn-bg);
+  --warn-stroke: var(--warn);
+  --warn-text:  #8a4b00;
+  --wire-warn:  var(--warn);
+  --wire-reset: var(--reset);
+  --bg:         var(--paper-2);
+  --panel:      var(--paper);
+  --ink1:       var(--ink-1);
+  --ink2:       var(--ink-2);
+  --ink3:       var(--ink-3);
+  --line:       var(--rule-2);
+  --font-han:   var(--font-cn);
+  --font-en:    var(--font-mono);
+}
+
+/* ============================================================================
+ * Reset
+ * ========================================================================== */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-roman), var(--font-cn);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
+  color: var(--ink-1);
+  background: var(--paper-2);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+  /* 工程图微网格（8px 方格，极淡） */
+  background-image:
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size: 8px 8px;
+}
+
+/* ============================================================================
+ * 链接
+ * ========================================================================== */
+a {
+  color: var(--acc);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+a:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ============================================================================
+ * 按钮（GB/T 18135 按钮风格）
+ * ========================================================================== */
+button {
+  font-family: var(--font-roman), var(--font-cn);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-1);
+  background: var(--paper);
+  border: var(--rule-mid) solid var(--rule);
+  border-radius: var(--r-0);
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: none;  /* 工程图无动画 */
+  text-transform: none;
+}
+button:hover {
+  border-width: var(--rule-bold);
+  padding: calc(6px - 0.5px) calc(14px - 0.5px);
+  background: var(--paper-2);
+}
+button:active {
+  background: var(--paper-3);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 主操作：黑底白字（不与 ISA 5.1 红色 = 动作混淆） */
+button.primary {
+  background: var(--ink-1);
+  color: var(--paper);
+  border-color: var(--ink-1);
+}
+button.primary:hover {
+  background: #000;
+  border-color: #000;
+}
+
+/* 危险：红边红字白底（不填红，避免与"关停"误读） */
+button.danger {
+  color: var(--err);
+  border-color: var(--err);
+  background: var(--paper);
+}
+button.danger:hover {
+  background: var(--err-bg);
+}
+
+/* 小号按钮 */
+button.sm {
+  font-size: var(--fs-xs);
+  padding: 3px 8px;
+}
+
+/* 图标按钮（无边框，X 关闭） */
+button.icon {
+  border: 0;
+  background: transparent;
+  padding: 4px;
+  color: var(--ink-3);
+}
+button.icon:hover { color: var(--ink-1); background: var(--paper-3); }
+
+/* ============================================================================
+ * 输入框 / 选择器
+ * ========================================================================== */
+input, select, textarea {
+  font: inherit;
+  font-family: var(--font-roman), var(--font-cn);
+  font-size: var(--fs-sm);
+  color: var(--ink-1);
+  background: var(--paper);
+  border: var(--rule-fine) solid var(--rule);
+  border-radius: var(--r-0);
+  padding: 6px 10px;
+  outline: none;
+}
+textarea {
+  font-family: var(--font-mono);
+  resize: vertical;
+}
+input:focus, select:focus, textarea:focus {
+  border-width: var(--rule-mid);
+  padding: calc(6px - 0.25px) calc(10px - 0.25px);
+  border-color: var(--ink-1);
+}
+input::placeholder, textarea::placeholder {
+  color: var(--ink-4);
+  font-style: normal;
+}
+input[type="number"] { font-family: var(--font-mono); }
+input[type="search"] { font-family: var(--font-roman), var(--font-cn); }
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink-2) 50%),
+    linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
+  background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 28px;
+}
+
+/* ============================================================================
+ * 标题层级
+ * ========================================================================== */
+h1, h2, h3, h4 {
+  font-family: var(--font-title);
+  color: var(--ink-1);
+  margin: 0;
+  letter-spacing: 0;
+  font-weight: 700;
+}
+h1 { font-size: var(--fs-xl); }
+h2 { font-size: var(--fs-lg); }
+h3 {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: var(--font-roman), var(--font-cn);
+  font-weight: 700;
+  color: var(--ink-2);
+  padding-bottom: var(--s-1);
+  border-bottom: var(--rule-fine) solid var(--rule);
+}
+h4 {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: var(--font-roman), var(--font-cn);
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+/* ============================================================================
+ * 卡片 / 区段（ISO 7200 标题栏化）
+ * ========================================================================== */
+.card {
+  background: var(--paper);
+  border: var(--rule-mid) solid var(--rule);
+  border-radius: var(--r-0);
+  padding: var(--s-4);
+}
+.card-title {
+  font-family: var(--font-title);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--ink-1);
+  margin: 0 0 var(--s-3) 0;
+  padding-bottom: var(--s-2);
+  border-bottom: var(--rule-mid) solid var(--rule);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* 强区块（stat / 数据盒） */
+.panel {
+  background: var(--paper);
+  border: var(--rule-mid) solid var(--rule);
+  border-radius: var(--r-0);
+  padding: var(--s-3) var(--s-4);
+}
+.panel-header {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--s-1);
+}
+.panel-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-huge);
+  font-weight: 700;
+  color: var(--ink-1);
+  line-height: var(--lh-tight);
+  font-variant-numeric: tabular-nums;
+}
+.panel-foot {
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  margin-top: var(--s-1);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ============================================================================
+ * 表格（GB/T 18135 表格风格：1px 黑色实线 + 无 zebra）
+ * ========================================================================== */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+  background: var(--paper);
+}
+thead th {
+  background: var(--paper-3);
+  color: var(--ink-1);
+  font-family: var(--font-roman), var(--font-cn);
+  font-weight: 700;
+  font-size: var(--fs-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: left;
+  padding: var(--s-2) var(--s-3);
+  border-top: var(--rule-mid) solid var(--rule);
+  border-bottom: var(--rule-mid) solid var(--rule);
+  border-right: var(--rule-fine) solid var(--rule-2);
+  white-space: nowrap;
+}
+thead th:last-child { border-right: 0; }
+tbody td {
+  padding: var(--s-2) var(--s-3);
+  border-bottom: var(--rule-fine) solid var(--rule-2);
+  border-right: var(--rule-fine) solid var(--rule-3);
+  vertical-align: middle;
+}
+tbody td:last-child { border-right: 0; }
+tbody tr:last-child td { border-bottom: var(--rule-mid) solid var(--rule); }
+tbody td.num,
+tbody td.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+tbody td.num { text-align: right; }
+tbody td.center { text-align: center; }
+
+/* ============================================================================
+ * Tag / 徽章 / ISA 5.1 圆圈
+ * ========================================================================== */
+.tag {
+  display: inline-block;
+  padding: 1px 8px;
+  font-family: var(--font-roman), var(--font-cn);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: var(--lh-tight) + 0.4;
+  border: var(--rule-fine) solid currentColor;
+  border-radius: var(--r-0);
+  background: var(--paper);
+  white-space: nowrap;
+}
+.tag.detector { color: var(--acc);  background: var(--acc-bg);  border-color: var(--acc); }
+.tag.final    { color: var(--fin);  background: var(--fin-bg);  border-color: var(--fin); }
+.tag.logic    { color: var(--ink-1); background: var(--paper-3); border-color: var(--ink-1); }
+.tag.aux      { color: var(--warn); background: var(--warn-bg); border-color: var(--warn); }
+.tag.reset    { color: var(--reset); background: #f0eafb;        border-color: var(--reset); }
+
+/* SIL 徽章（按 ISA 5.1 颜色递增） */
+.tag.sil-na { color: var(--sil-na); background: var(--sil-na-bg); border-color: var(--sil-na); }
+.tag.sil-a  { color: var(--sil-a);  background: var(--sil-a-bg);  border-color: var(--sil-a); }
+.tag.sil-b  { color: var(--sil-b);  background: var(--sil-b-bg);  border-color: var(--sil-b); }
+.tag.sil-c  { color: var(--sil-c);  background: var(--sil-c-bg);  border-color: var(--sil-c); }
+.tag.sil-d  { color: var(--sil-d);  background: var(--sil-d-bg);  border-color: var(--sil-d); }
+
+/* ISA 5.1 圆圈（仪表 bubble）：用于 SIF 汇总表格中点列 */
+.bubble {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  line-height: 16px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  color: var(--ink-1);
+  background: var(--paper);
+  border: var(--rule-mid) solid var(--rule);
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.bubble.detector { border-color: var(--acc);  color: var(--acc); }
+.bubble.final    { border-color: var(--fin);  color: var(--fin); }
+.bubble.logic    { border-color: var(--ink-1); }
+.bubble.aux      { border-color: var(--warn); color: var(--warn); }
+
+/* ============================================================================
+ * 工具类
+ * ========================================================================== */
+.muted { color: var(--ink-3); }
+.weak  { color: var(--ink-4); }
+.mono  { font-family: var(--font-mono); }
+.roman { font-family: var(--font-roman), var(--font-cn); }
+.uppercase {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.numeric {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.empty {
+  padding: var(--s-6) var(--s-4);
+  text-align: center;
+  color: var(--ink-3);
+  background: var(--paper);
+  border: var(--rule-fine) dashed var(--rule-2);
+  font-size: var(--fs-sm);
+}
+
+/* ============================================================================
+ * 弹窗（ISO 7200 标题栏风格）
+ * ========================================================================== */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 20, 26, 0.55);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+}
+.modal {
+  width: 720px;
+  max-width: 92vw;
+  max-height: 88vh;
+  overflow: auto;
+  background: var(--paper);
+  border: var(--rule-bold) solid var(--ink-1);
+  border-radius: var(--r-0);
+  /* 工程图标题栏化 */
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: var(--rule-mid) solid var(--ink-1);
+  background: var(--paper-3);
+  font-family: var(--font-title);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-1);
+}
+.modal-header .ref {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  text-transform: none;
+  color: var(--ink-3);
+}
+.modal-body {
+  padding: var(--s-4);
+}
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border-top: var(--rule-fine) solid var(--rule-2);
+  background: var(--paper-2);
+}
+.modal-footer .ref {
+  margin-right: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ============================================================================
+ * 表单字段（弹窗 / 内嵌）
+ * ========================================================================== */
+.form {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--s-3) var(--s-4);
+  margin: var(--s-3) 0;
+}
+.form .full { grid-column: 1 / -1; }
+.form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.form label input,
+.form label select,
+.form label textarea {
+  font-size: var(--fs-sm);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.form label input::placeholder { color: var(--ink-4); }
+
+/* ============================================================================
+ * 描述列表（dl/dt/dd）—— 工程图说明栏样式
+ * ========================================================================== */
+dl.kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  row-gap: var(--s-1);
+  column-gap: var(--s-4);
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+dl.kv dt {
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  align-self: baseline;
+}
+dl.kv dd {
+  margin: 0;
+  color: var(--ink-1);
+  font-family: var(--font-roman), var(--font-cn);
+}
+dl.kv dd.mono {
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+dl.kv .full { grid-column: 1 / -1; }
+
+/* ============================================================================
+ * 顶部 / 侧栏 / 标题栏（App.vue 用）
+ * ========================================================================== */
+.topbar-title {
+  font-family: var(--font-title);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-1);
+}
+.topbar-meta {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================================
+ * 选择状态（行 / 单元）
+ * ========================================================================== */
+tr.selected td,
+tr.active td {
+  background: var(--acc-bg) !important;
+}
+tr.selected td:first-child {
+  border-left: var(--rule-mid) solid var(--acc);
+}
+
+/* ============================================================================
+ * 滚动条（淡化为工程图风）
+ * ========================================================================== */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--paper-3); }
+::-webkit-scrollbar-thumb {
+  background: var(--rule-2);
+  border: var(--rule-fine) solid var(--paper-3);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
+
+/* ============================================================================
+ * 打印（如果未来要出 PDF）
+ * ========================================================================== */
+@media print {
+  body { background: white; }
+  .sidebar, .topbar, .modal-mask { display: none; }
+}
