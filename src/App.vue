@@ -22,35 +22,51 @@
           <span>首页</span>
           <span class="nav-key">01</span>
         </router-link>
+        <!-- 项目中心化导航：项目是业务主入口（详情页内含该项目的台账/联锁图/SIF/导入） -->
+        <router-link to="/projects" active-class="active">
+          <FolderOpen :size="16" />
+          <span>项目</span>
+          <span class="nav-key">02</span>
+        </router-link>
         <router-link to="/instruments" exact-active-class="active">
           <Database :size="16" />
-          <span>仪表台账</span>
-          <span class="nav-key">02</span>
+          <span>台账总览</span>
+          <span class="nav-key">03</span>
+        </router-link>
+        <router-link to="/alarms" exact-active-class="active">
+          <Bell :size="16" />
+          <span>报警台账</span>
+          <span class="nav-key">04</span>
         </router-link>
         <router-link to="/sifs" exact-active-class="active">
           <GitBranch :size="16" />
-          <span>SIF 汇总</span>
-          <span class="nav-key">03</span>
-        </router-link>
-        <router-link to="/projects" exact-active-class="active">
-          <FolderOpen :size="16" />
-          <span>项目</span>
-          <span class="nav-key">04</span>
+          <span>SIF 总览</span>
+          <span class="nav-key">05</span>
         </router-link>
         <router-link to="/bypass" exact-active-class="active">
           <ShieldAlert :size="16" />
           <span>旁路授权</span>
-          <span class="nav-key">05</span>
+          <span class="nav-key">06</span>
+        </router-link>
+        <router-link to="/lopa" exact-active-class="active">
+          <Layers :size="16" />
+          <span>LOPA</span>
+          <span class="nav-key">07</span>
+        </router-link>
+        <router-link to="/sops" exact-active-class="active">
+          <ClipboardCheck :size="16" />
+          <span>检验规程</span>
+          <span class="nav-key">08</span>
         </router-link>
         <router-link to="/audit" exact-active-class="active">
           <ScrollText :size="16" />
           <span>审计中心</span>
-          <span class="nav-key">06</span>
+          <span class="nav-key">09</span>
         </router-link>
         <router-link to="/settings" exact-active-class="active">
           <Settings :size="16" />
           <span>设置</span>
-          <span class="nav-key">07</span>
+          <span class="nav-key">10</span>
         </router-link>
       </nav>
 
@@ -108,7 +124,7 @@
     <!-- 主区 -->
     <main class="main">
       <!-- 顶栏 = ISO 7200 标题栏（margin 让位给 BypassAlertBanner） -->
-      <header class="topbar" :class="{ 'topbar-with-alert': hasBypassAlert }">
+      <header class="topbar" :class="{ 'topbar-with-alert': hasBypassAlert || hasProofTestAlert }">
         <div class="tb-cell tb-title">
           <div class="tb-key">TITLE</div>
           <div class="tb-val">{{ currentTitle || "—" }}</div>
@@ -129,6 +145,7 @@
 
       <!-- M2.2 增强：全站旁路逾期告警横幅（IEC 61511-1 §11.5.2 合规缺口） -->
       <BypassAlertBanner />
+      <ProofTestBanner />
 
       <section class="content">
         <!-- 数据层初始化失败时的错误横幅（避免白屏无可诊断信息） -->
@@ -165,16 +182,20 @@ import { useRoute, useRouter } from "vue-router";
 import {
   LayoutGrid,
   Database,
+  Bell,
   GitBranch,
   FolderOpen,
   ShieldAlert,
   ScrollText,
   Settings,
+  Layers,
+  ClipboardCheck,
 } from "lucide-vue-next";
 import { useStudioStore } from "./stores/studio";
 import { useAuthStore } from "./stores/auth";
 import { acceptInvite, invitePreview, roleLabel } from "./api/org";
 import BypassAlertBanner from "./components/BypassAlertBanner.vue";
+import ProofTestBanner from "./components/ProofTestBanner.vue";
 
 const store = useStudioStore();
 const auth = useAuthStore();
@@ -281,13 +302,16 @@ const currentTitle = computed(() => (route.meta.title as string) ?? "");
 const routeSection = computed(() => {
   const p = route.path;
   if (p === "/") return "01 / OVERVIEW";
-  if (p.startsWith("/instruments")) return "02 / INSTRUMENT REGISTRY";
-  if (p.startsWith("/sifs")) return "03 / SIF SUMMARY";
-  if (p.startsWith("/projects")) return "04 / PROJECT INDEX";
-  if (p.startsWith("/diagram")) return "05 / LOGIC DIAGRAM";
-  if (p.startsWith("/bypass")) return "06 / BYPASS REGISTER";
-  if (p.startsWith("/audit")) return "07 / AUDIT EXPORT";
-  if (p.startsWith("/settings")) return "08 / SYSTEM SETTINGS";
+  if (p.startsWith("/projects")) return "02 / PROJECT WORKSPACE";
+  if (p.startsWith("/instruments")) return "03 / INSTRUMENT REGISTRY";
+  if (p.startsWith("/alarms")) return "04 / ALARM REGISTRY";
+  if (p.startsWith("/sifs")) return "05 / SIF SUMMARY";
+  if (p.startsWith("/diagram")) return "06 / LOGIC DIAGRAM";
+  if (p.startsWith("/bypass")) return "07 / BYPASS REGISTER";
+  if (p.startsWith("/lopa")) return "08 / LOPA";
+  if (p.startsWith("/sops")) return "09 / PROOF TEST PROCEDURES";
+  if (p.startsWith("/audit")) return "10 / AUDIT EXPORT";
+  if (p.startsWith("/settings")) return "11 / SYSTEM SETTINGS";
   return p.toUpperCase();
 });
 
@@ -295,6 +319,7 @@ const buildStamp = computed(() => "REV A · " + new Date().toISOString().slice(0
 const today = new Date().toISOString().slice(0, 10);
 // M2.2 增强：横幅 fixed 时需要给顶栏让位（避免遮挡）
 const hasBypassAlert = computed(() => store.overdueBypassStatus.count > 0);
+const hasProofTestAlert = computed(() => store.overdueProofTestStatus.count > 0);
 const pageCode = computed(() => {
   const map: Record<string, string> = {
     "/": "DWG-001",
@@ -302,10 +327,14 @@ const pageCode = computed(() => {
     "/sifs": "DWG-003",
     "/projects": "DWG-004",
     "/bypass": "DWG-006",
+    "/lopa": "DWG-009",
+    "/sops": "DWG-010",
     "/audit": "DWG-007",
     "/settings": "DWG-008",
   };
   if (route.path.startsWith("/diagram")) return "DWG-005";
+  // 项目列表与项目详情同属 04（项目工作区）
+  if (route.path.startsWith("/projects")) return "DWG-004";
   return map[route.path] ?? "DWG-000";
 });
 

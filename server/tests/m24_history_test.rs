@@ -45,6 +45,14 @@ fn inst_input(tag: &str, setpoint: Option<f64>, service: &str, unit: &str) -> In
         setpoint,
         sil_target: "B".into(),
         proof_interval: 12,
+        lambda_du: 0.0,
+        lambda_dd: 0.0,
+        lambda_su: 0.0,
+        lambda_sd: 0.0,
+        sff: 0.0,
+        pt_coverage: 1.0,
+        hft: 0,
+        equipment_type: "type_b".into(),
         installed_at: "2025-06-12".into(),
         notes: String::new(),
         // M2.9 — 测试用项目 ID 1（setup 中建的项目）
@@ -59,11 +67,17 @@ fn sif_input(project_id: i64, code: &str, name: &str) -> SifInput {
         code: code.into(),
         name: name.into(),
         description: "初始说明".into(),
-        sil_design: "B".into(),
-        sil_verified: "B".into(),
+        sil_design: "NA".into(),
+        sil_verified: "NA".into(),
         demand_mode: "low".into(),
         pfdavg_target: Some(0.005),
         proof_interval: 12,
+    sensor_arch: "1oo1".into(),
+    logic_arch: "1oo1".into(),
+    final_arch: "1oo1".into(),
+    mttr_hours: 8.0,
+    beta_factor: 0.10,
+    ..Default::default()
     }
 }
 

@@ -9,7 +9,8 @@
 //!   - get_diagram_inner 取单图 + data 字段完整
 //!   - get_diagram_inner 404（NotFound 错误）
 //!   - create_diagram_inner 必填校验 + UNIQUE 冲突（org_id+project_id+code）
-//!   - ensure_default_diagram_inner 首次进入空白项目自动建占位图
+//!   - create_diagram_inner 未指定 sif_id 时自动建配套 SIF（一张图 = 一个 SIF）
+//!   - ensure_default_diagram_inner 首次进入空白项目自动建占位图（同时自动建 SIF）
 //!     （并守住契约：默认 data 不得含 blocks 数组，否则编辑器会清成空白）
 //!   - ensure_default_diagram_inner 第二次进入同一项目返已有图（不重复建）
 //!   - 快照往返：编辑器快照原样落库 + 往返后仍是有效快照（防「打开即空白」）
@@ -23,6 +24,7 @@ use sif_studio_lib::commands::diagrams::{
 use sif_studio_lib::commands::projects::{
     create_project_inner, delete_project_inner, ProjectInput,
 };
+use sif_studio_lib::commands::sifs::list_sifs_inner;
 use sif_studio_lib::db::open_in_memory;
 use sif_studio_lib::AppError;
 use sqlx::{Pool, Sqlite};
@@ -74,7 +76,7 @@ fn diag_input(pid: i64, code: &str, name: &str, data: &str) -> DiagramInput {
 #[tokio::test]
 async fn save_diagram_data_writes_and_reads_back() {
     let (pool, pid) = setup().await;
-    let d = create_diagram_inner(&pool, ORG, &diag_input(pid, "DGM-1", "测试图", "{}"))
+    let d = create_diagram_inner(&pool, ORG, &diag_input(pid, "DGM-1", "测试图", "{}"), ACTOR)
         .await
         .unwrap();
 
@@ -94,7 +96,7 @@ async fn save_diagram_data_writes_and_reads_back() {
 #[tokio::test]
 async fn save_diagram_data_overwrites_previous() {
     let (pool, pid) = setup().await;
-    let d = create_diagram_inner(&pool, ORG, &diag_input(pid, "DGM-2", "覆盖图", "{}"))
+    let d = create_diagram_inner(&pool, ORG, &diag_input(pid, "DGM-2", "覆盖图", "{}"), ACTOR)
         .await
         .unwrap();
 
@@ -117,7 +119,7 @@ async fn save_diagram_data_overwrites_previous() {
 #[tokio::test]
 async fn save_diagram_data_stale_version_conflicts() {
     let (pool, pid) = setup().await;
-    let d = create_diagram_inner(&pool, ORG, &diag_input(pid, "DGM-C", "冲突图", "{}"))
+    let d = create_diagram_inner(&pool, ORG, &diag_input(pid, "DGM-C", "冲突图", "{}"), ACTOR)
         .await
         .unwrap();
 
@@ -163,6 +165,7 @@ async fn get_diagram_returns_full_row() {
             "第一图",
             r#"{"layout":"SIF-201","drawings":[]}"#,
         ),
+        ACTOR,
     )
     .await
     .unwrap();
@@ -196,17 +199,18 @@ async fn create_diagram_validation_rejects_blank_code() {
     // 同时清掉 name 让校验两个分支都触发
     input.code = "".into();
     input.name = "  ".into();
-    let r = create_diagram_inner(&pool, ORG, &input).await;
+    let r = create_diagram_inner(&pool, ORG, &input, ACTOR).await;
     assert!(r.is_err(), "空 code/name 应被拒：{r:?}");
 }
 
 #[tokio::test]
 async fn create_diagram_unique_violation_per_project() {
     let (pool, pid) = setup().await;
-    create_diagram_inner(&pool, ORG, &diag_input(pid, "DGM-SAME", "图甲", "{}"))
+    create_diagram_inner(&pool, ORG, &diag_input(pid, "DGM-SAME", "图甲", "{}"), ACTOR)
         .await
         .unwrap();
-    let r = create_diagram_inner(&pool, ORG, &diag_input(pid, "DGM-SAME", "图乙", "{}")).await;
+    let r =
+        create_diagram_inner(&pool, ORG, &diag_input(pid, "DGM-SAME", "图乙", "{}"), ACTOR).await;
     assert!(r.is_err(), "同组织同项目同 code 应被拒：{r:?}");
 }
 
@@ -231,14 +235,148 @@ async fn create_diagram_same_code_in_other_project_allowed() {
     .await
     .unwrap();
 
-    create_diagram_inner(&pool, ORG, &diag_input(pid1, "DGM-X", "图甲", "{}"))
+    create_diagram_inner(&pool, ORG, &diag_input(pid1, "DGM-X", "图甲", "{}"), ACTOR)
         .await
         .unwrap();
-    let r = create_diagram_inner(&pool, ORG, &diag_input(p2.id, "DGM-X", "图甲副本", "{}")).await;
+    let r =
+        create_diagram_inner(&pool, ORG, &diag_input(p2.id, "DGM-X", "图甲副本", "{}"), ACTOR)
+            .await;
     assert!(
         r.is_ok(),
         "同 code 跨项目应允许（UNIQUE 是 project_id+code 复合）：{r:?}"
     );
+}
+
+// ===========================================================================
+// 一张图 = 一个 SIF：未指定 sif_id 时自动建配套 SIF
+// ===========================================================================
+
+#[tokio::test]
+async fn create_diagram_auto_creates_and_links_sif() {
+    let (pool, pid) = setup().await;
+
+    // 初始项目没有任何 SIF
+    let before = list_sifs_inner(&pool, ORG, Some(pid)).await.unwrap();
+    assert!(before.is_empty(), "新项目应无 SIF");
+
+    let d = create_diagram_inner(&pool, ORG, &diag_input(pid, "DGM-007", "进料泵联锁", "{}"), ACTOR)
+        .await
+        .unwrap();
+
+    // 图必须回挂新建的 SIF（不再是 NULL）
+    let sif_id = d.sif_id.expect("自动建图必须回挂 sif_id");
+
+    // 项目 SIF 汇总应即时出现该 SIF
+    let sifs = list_sifs_inner(&pool, ORG, Some(pid)).await.unwrap();
+    assert_eq!(sifs.len(), 1, "建图后项目 SIF 汇总应有 1 条");
+    assert_eq!(sifs[0].id, sif_id);
+    assert_eq!(sifs[0].code, "SIF-001", "首张图自动编号 SIF-001");
+    assert_eq!(sifs[0].name, "进料泵联锁", "SIF 名称应沿用图名");
+
+    // 图列表的 join 字段也应带出 SIF 编号
+    let list = list_diagrams_inner(&pool, ORG, Some(pid)).await.unwrap();
+    assert_eq!(list[0].sif_id, Some(sif_id));
+    assert_eq!(list[0].sif_code.as_deref(), Some("SIF-001"));
+}
+
+#[tokio::test]
+async fn create_diagram_auto_sif_codes_increment_per_project() {
+    let (pool, pid1) = setup().await;
+    let p2 = create_project_inner(
+        &pool,
+        ORG,
+        &ProjectInput {
+            code: "PRJ-G".into(),
+            name: "项目二".into(),
+            client: "".into(),
+            location: "".into(),
+            phase: "design".into(),
+            finished_at: "".into(),
+            notes: "".into(),
+        },
+        ACTOR,
+    )
+    .await
+    .unwrap();
+
+    // 项目一：两张图 → SIF-001 / SIF-002
+    create_diagram_inner(&pool, ORG, &diag_input(pid1, "D1", "图一", "{}"), ACTOR)
+        .await
+        .unwrap();
+    create_diagram_inner(&pool, ORG, &diag_input(pid1, "D2", "图二", "{}"), ACTOR)
+        .await
+        .unwrap();
+    // 项目二：独立编号空间，从 SIF-001 重新起
+    create_diagram_inner(&pool, ORG, &diag_input(p2.id, "E1", "另一项目图", "{}"), ACTOR)
+        .await
+        .unwrap();
+
+    let s1 = list_sifs_inner(&pool, ORG, Some(pid1)).await.unwrap();
+    let s2 = list_sifs_inner(&pool, ORG, Some(p2.id)).await.unwrap();
+    assert_eq!(s1.len(), 2);
+    assert_eq!(s1[0].code, "SIF-001");
+    assert_eq!(s1[1].code, "SIF-002");
+    assert_eq!(s2.len(), 1);
+    assert_eq!(s2[0].code, "SIF-001", "SIF 编号按项目独立顺延");
+
+    // 全局总览（无 project 过滤）：3 个项目的 SIF 全部可见
+    let all = list_sifs_inner(&pool, ORG, None).await.unwrap();
+    assert_eq!(all.len(), 3, "全局 SIF 总览应跨项目显示全部 3 条");
+}
+
+#[tokio::test]
+async fn create_diagram_explicit_sif_id_is_kept() {
+    use sif_studio_lib::commands::sifs::{create_sif_inner, SifInput};
+
+    let (pool, pid) = setup().await;
+    // 先手工建 SIF
+    let sif = create_sif_inner(
+        &pool,
+        ORG,
+        &SifInput {
+            project_id: pid,
+            code: "SIF-900".into(),
+            name: "手工 SIF".into(),
+            description: String::new(),
+            sil_design: "A".into(),
+            sil_verified: "NA".into(),
+            demand_mode: "low".into(),
+            pfdavg_target: None,
+            proof_interval: 12,
+        sensor_arch: "1oo1".into(),
+        logic_arch: "1oo1".into(),
+        final_arch: "1oo1".into(),
+        mttr_hours: 8.0,
+        beta_factor: 0.10,
+        ..Default::default()
+        },
+        ACTOR,
+    )
+    .await
+    .unwrap();
+
+    let mut input = diag_input(pid, "DGM-X9", "挂手工 SIF 的图", "{}");
+    input.sif_id = Some(sif.id);
+    let d = create_diagram_inner(&pool, ORG, &input, ACTOR).await.unwrap();
+    assert_eq!(d.sif_id, Some(sif.id));
+
+    let sifs = list_sifs_inner(&pool, ORG, Some(pid)).await.unwrap();
+    assert_eq!(sifs.len(), 1, "显式挂接时不得另建 SIF");
+    assert_eq!(sifs[0].code, "SIF-900");
+}
+
+#[tokio::test]
+async fn create_diagram_duplicate_code_rolls_back_auto_sif() {
+    let (pool, pid) = setup().await;
+    create_diagram_inner(&pool, ORG, &diag_input(pid, "DGM-DUP", "图甲", "{}"), ACTOR)
+        .await
+        .unwrap();
+    // 同 code 再建 → 409；自动建的 SIF 必须随事务回滚，不留孤儿
+    let r = create_diagram_inner(&pool, ORG, &diag_input(pid, "DGM-DUP", "图乙", "{}"), ACTOR)
+        .await;
+    assert!(matches!(r, Err(AppError::Conflict(_))));
+    let sifs = list_sifs_inner(&pool, ORG, Some(pid)).await.unwrap();
+    assert_eq!(sifs.len(), 1, "冲突回滚后不得多出孤儿 SIF");
 }
 
 // ===========================================================================
@@ -252,7 +390,9 @@ async fn ensure_default_diagram_creates_placeholder_when_empty() {
     let list = list_diagrams_inner(&pool, ORG, Some(pid)).await.unwrap();
     assert!(list.is_empty(), "新项目应无图");
 
-    let d = ensure_default_diagram_inner(&pool, ORG, pid).await.unwrap();
+    let d = ensure_default_diagram_inner(&pool, ORG, pid, ACTOR)
+        .await
+        .unwrap();
     assert_eq!(d.project_id, pid);
     assert_eq!(d.code, "DGM-001");
     // ★ 契约：默认 data 必须是「明确的不可用快照」，绝不能被误当成有效快照。
@@ -270,6 +410,10 @@ async fn ensure_default_diagram_creates_placeholder_when_empty() {
         "默认 data 不得含 blocks 数组，否则会被编辑器当成有效快照而清成空白：{}",
         d.data
     );
+    // 占位图同样自动配一个 SIF
+    assert!(d.sif_id.is_some(), "占位图也应自动挂接 SIF");
+    let sifs = list_sifs_inner(&pool, ORG, Some(pid)).await.unwrap();
+    assert_eq!(sifs.len(), 1);
     // 应能在 list 里被查到
     let list2 = list_diagrams_inner(&pool, ORG, Some(pid)).await.unwrap();
     assert_eq!(list2.len(), 1);
@@ -280,11 +424,14 @@ async fn ensure_default_diagram_creates_placeholder_when_empty() {
 async fn ensure_default_diagram_returns_existing_when_present() {
     let (pool, pid) = setup().await;
     // 先手动建一张
-    let manual = create_diagram_inner(&pool, ORG, &diag_input(pid, "DGM-MANUAL", "手工图", "{}"))
+    let manual =
+        create_diagram_inner(&pool, ORG, &diag_input(pid, "DGM-MANUAL", "手工图", "{}"), ACTOR)
+            .await
+            .unwrap();
+    // 再 ensure_default → 应返已有手工图（不重复建）
+    let d = ensure_default_diagram_inner(&pool, ORG, pid, ACTOR)
         .await
         .unwrap();
-    // 再 ensure_default → 应返已有手工图（不重复建）
-    let d = ensure_default_diagram_inner(&pool, ORG, pid).await.unwrap();
     assert_eq!(
         d.id, manual.id,
         "已有图时 ensure_default 必须返已有而不是再插一张"
@@ -309,7 +456,7 @@ async fn save_diagram_data_roundtrips_editor_snapshot_verbatim() {
         r#""sifCols":["detect","vote","logic","latch","aux","final"],"sif":{},"silv":{},"#,
         r#""doc":{},"revs":[],"showSch":true,"autoFit":true,"showSlot":true,"wireMode":"cause"}"#
     );
-    let d = create_diagram_inner(&pool, ORG, &diag_input(pid, "DWG-RT", "往返图", "{}"))
+    let d = create_diagram_inner(&pool, ORG, &diag_input(pid, "DWG-RT", "往返图", "{}"), ACTOR)
         .await
         .unwrap();
 
@@ -354,13 +501,13 @@ async fn list_diagrams_filter_by_project() {
     .await
     .unwrap();
 
-    create_diagram_inner(&pool, ORG, &diag_input(pid1, "A1", "图 1", "{}"))
+    create_diagram_inner(&pool, ORG, &diag_input(pid1, "A1", "图 1", "{}"), ACTOR)
         .await
         .unwrap();
-    create_diagram_inner(&pool, ORG, &diag_input(pid1, "A2", "图 2", "{}"))
+    create_diagram_inner(&pool, ORG, &diag_input(pid1, "A2", "图 2", "{}"), ACTOR)
         .await
         .unwrap();
-    create_diagram_inner(&pool, ORG, &diag_input(p2.id, "B1", "另一项目图", "{}"))
+    create_diagram_inner(&pool, ORG, &diag_input(p2.id, "B1", "另一项目图", "{}"), ACTOR)
         .await
         .unwrap();
 
@@ -382,7 +529,7 @@ async fn list_diagrams_filter_by_project() {
 #[tokio::test]
 async fn deleting_project_cascades_diagrams() {
     let (pool, pid) = setup().await;
-    let d = create_diagram_inner(&pool, ORG, &diag_input(pid, "CASCADE-1", "随项目走", "{}"))
+    let d = create_diagram_inner(&pool, ORG, &diag_input(pid, "CASCADE-1", "随项目走", "{}"), ACTOR)
         .await
         .unwrap();
     assert!(get_diagram_inner(&pool, ORG, d.id).await.is_ok());

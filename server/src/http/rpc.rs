@@ -20,9 +20,12 @@ use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
 use crate::commands::{
-    audit_export, bypasses, diagrams, imports, instruments, meta, projects, sifs, tags,
+    alarms, audit_export, bypasses, diagrams, imports, instruments, lopa, meta, projects, proof_tests, sifs, sops,
+    tags,
 };
+
 use crate::http::auth::AuthUser;
+
 use crate::{AppError, AppResult, AppState};
 
 #[derive(Debug, serde::Deserialize)]
@@ -102,6 +105,10 @@ const WRITE_CMDS: &[&str] = &[
     "create_instrument",
     "update_instrument",
     "delete_instrument",
+    // 报警台账
+    "create_alarm",
+    "update_alarm",
+    "delete_alarm",
     "create_project",
     "update_project",
     "delete_project",
@@ -120,6 +127,21 @@ const WRITE_CMDS: &[&str] = &[
     "update_bypass",
     "restore_bypass",
     "delete_bypass",
+    // 检验测试（IEC 61511-1 §16.3）
+    "create_proof_test",
+    "update_proof_test",
+    "delete_proof_test",
+    // 检验测试规程 SOP（IEC 61511-1 §16.2.2）
+    "create_proof_test_sop",
+    "update_proof_test_sop",
+    "delete_proof_test_sop",
+    // LOPA 保护层分析（IEC 61511-1 Annex E）
+    "create_lopa_scenario",
+    "update_lopa_scenario",
+    "delete_lopa_scenario",
+    "create_lopa_layer",
+    "update_lopa_layer",
+    "delete_lopa_layer",
     // 批量导入（会落库）
     "import_tags_csv",
     "commit_import_instruments",
@@ -212,6 +234,47 @@ pub(crate) async fn rpc_handler(
             .await?,
         )?,
 
+        // ---- alarms（报警台账，ISA-18.2；与联锁图/SIF 无业务关联） ----
+        "list_alarms" => {
+            serde_json::to_value(alarms::list_alarms_inner(pool, org_id).await?)?
+        }
+        "list_alarms_by_project" => serde_json::to_value(
+            alarms::list_alarms_by_project_inner(
+                pool,
+                org_id,
+                required(args, "projectId")?,
+            )
+            .await?,
+        )?,
+        "create_alarm" => serde_json::to_value(
+            alarms::create_alarm_inner(pool, org_id, actor, input_of(args)?).await?,
+        )?,
+        "get_alarm" => serde_json::to_value(
+            alarms::get_alarm_inner(pool, org_id, required(args, "id")?).await?,
+        )?,
+        "update_alarm" => serde_json::to_value(
+            alarms::update_alarm_inner(
+                pool,
+                org_id,
+                actor,
+                required(args, "id")?,
+                input_of(args)?,
+            )
+            .await?,
+        )?,
+        "delete_alarm" => serde_json::to_value(
+            alarms::delete_alarm_inner(pool, org_id, actor, required(args, "id")?).await?,
+        )?,
+        "list_alarm_history" => serde_json::to_value(
+            alarms::list_alarm_history_inner(
+                pool,
+                org_id,
+                required(args, "alarmId")?,
+                optional(args, "limit")?,
+            )
+            .await?,
+        )?,
+
         // ---- projects ----
         "list_projects" => {
             serde_json::to_value(projects::list_projects_inner(pool, org_id).await?)?
@@ -256,11 +319,16 @@ pub(crate) async fn rpc_handler(
             diagrams::get_diagram_inner(pool, org_id, required(args, "id")?).await?,
         )?,
         "create_diagram" => serde_json::to_value(
-            diagrams::create_diagram_inner(pool, org_id, &input_of(args)?).await?,
+            diagrams::create_diagram_inner(pool, org_id, &input_of(args)?, actor).await?,
         )?,
         "ensure_default_diagram" => serde_json::to_value(
-            diagrams::ensure_default_diagram_inner(pool, org_id, required(args, "projectId")?)
-                .await?,
+            diagrams::ensure_default_diagram_inner(
+                pool,
+                org_id,
+                required(args, "projectId")?,
+                actor,
+            )
+            .await?,
         )?,
         "save_diagram_data" => serde_json::to_value(
             diagrams::save_diagram_data_inner(
@@ -363,6 +431,104 @@ pub(crate) async fn rpc_handler(
         "count_overdue_bypasses" => {
             serde_json::to_value(bypasses::count_overdue_bypasses_inner(pool, org_id).await?)?
         }
+
+        // ---- proof_tests（检验测试，IEC 61511-1 §16.3）----
+        "list_proof_tests" => serde_json::to_value(
+            proof_tests::list_proof_tests_inner(pool, org_id, optional(args, "sifId")?).await?,
+        )?,
+        "create_proof_test" => serde_json::to_value(
+            proof_tests::create_proof_test_inner(pool, org_id, actor, input_of(args)?).await?,
+        )?,
+        "update_proof_test" => serde_json::to_value(
+            proof_tests::update_proof_test_inner(
+                pool,
+                org_id,
+                actor,
+                required(args, "id")?,
+                input_of(args)?,
+            )
+            .await?,
+        )?,
+        "delete_proof_test" => serde_json::to_value(
+            proof_tests::delete_proof_test_inner(pool, org_id, actor, required(args, "id")?).await?,
+        )?,
+        "count_overdue_proof_tests" => {
+            serde_json::to_value(proof_tests::count_overdue_proof_tests_inner(pool, org_id).await?)?
+        }
+        "list_proof_test_history" => serde_json::to_value(
+            proof_tests::list_proof_test_history_inner(
+                pool,
+                org_id,
+                required(args, "proofTestId")?,
+                optional(args, "limit")?,
+            )
+            .await?,
+        )?,
+
+        // ---- proof_test_sop（检验规程，IEC 61511-1 §16.2.2）----
+        "list_proof_test_sops" => {
+            serde_json::to_value(sops::list_sops_inner(pool, org_id).await?)?
+        }
+        "create_proof_test_sop" => serde_json::to_value(
+            sops::create_sop_inner(pool, org_id, &input_of(args)?, actor).await?,
+        )?,
+        "update_proof_test_sop" => serde_json::to_value(
+            sops::update_sop_inner(pool, org_id, required(args, "id")?, &input_of(args)?, actor)
+                .await?,
+        )?,
+        "delete_proof_test_sop" => serde_json::to_value(
+            sops::delete_sop_inner(
+                pool,
+                org_id,
+                required(args, "id")?,
+                optional(args, "force")?.unwrap_or(false),
+                actor,
+            )
+            .await?,
+        )?,
+
+        // ---- lopa（保护层分析，IEC 61511-1 Annex E）----
+        "list_lopa_scenarios" => serde_json::to_value(
+            lopa::list_lopa_scenarios_inner(pool, org_id, optional(args, "projectId")?).await?,
+        )?,
+        "get_lopa_scenario" => serde_json::to_value(
+            lopa::get_lopa_scenario_inner(pool, org_id, required(args, "id")?).await?,
+        )?,
+        "create_lopa_scenario" => serde_json::to_value(
+            lopa::create_lopa_scenario_inner(pool, org_id, &input_of(args)?, actor).await?,
+        )?,
+        "update_lopa_scenario" => serde_json::to_value(
+            lopa::update_lopa_scenario_inner(
+                pool,
+                org_id,
+                required(args, "id")?,
+                &input_of(args)?,
+                actor,
+            )
+            .await?,
+        )?,
+        "delete_lopa_scenario" => serde_json::to_value(
+            lopa::delete_lopa_scenario_inner(pool, org_id, required(args, "id")?, actor).await?,
+        )?,
+        "list_lopa_layers" => serde_json::to_value(
+            lopa::list_lopa_layers_inner(pool, org_id, required(args, "scenarioId")?).await?,
+        )?,
+        "create_lopa_layer" => serde_json::to_value(
+            lopa::create_lopa_layer_inner(pool, org_id, &input_of(args)?, actor).await?,
+        )?,
+        "update_lopa_layer" => serde_json::to_value(
+            lopa::update_lopa_layer_inner(
+                pool,
+                org_id,
+                required(args, "id")?,
+                &input_of(args)?,
+                actor,
+            )
+            .await?,
+        )?,
+        "delete_lopa_layer" => serde_json::to_value(
+            lopa::delete_lopa_layer_inner(pool, org_id, required(args, "id")?, actor).await?,
+        )?,
 
         // ---- tags（M1.5 位号批量导入，保留可用）----
         "import_tags_csv" => {

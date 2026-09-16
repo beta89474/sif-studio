@@ -135,8 +135,8 @@ async fn test_db_version_is_one() {
         .fetch_one(&pool)
         .await
         .unwrap();
-    // F 阶段 — 新增 v006_user_password_flags，迁移跑过 6 次
-    assert_eq!(v, 6, "v001..v005 + v006 (must_change_password) 都该跑过");
+    // 迁移当前到 v016（015 LOPA 保护层分析 / 016 检验规程 SOP）
+    assert_eq!(v, 16, "v001..v016 全部迁移都该跑过");
 }
 
 // ... 其余 6 个原有测试保持原样
@@ -1335,6 +1335,14 @@ fn inst_input(tag: &str, setpoint: Option<f64>, service: &str, unit: &str) -> In
         setpoint,
         sil_target: "B".into(),
         proof_interval: 12,
+        lambda_du: 0.0,
+        lambda_dd: 0.0,
+        lambda_su: 0.0,
+        lambda_sd: 0.0,
+        sff: 0.0,
+        pt_coverage: 1.0,
+        hft: 0,
+        equipment_type: "type_b".into(),
         installed_at: "2025-06-12".into(),
         notes: String::new(),
         // M2.9 — 测试 helper 占位 project_id=1

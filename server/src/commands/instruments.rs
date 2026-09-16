@@ -19,7 +19,8 @@ use sqlx::FromRow;
 
 const SELECT_COLS: &str = "id, tag, service, kind, role, psv_id, manufacturer, model,
      range_min, range_max, unit, setpoint, sil_target,
-     proof_interval, installed_at, notes, project_id";
+     proof_interval, installed_at, notes, project_id,
+     lambda_du, lambda_dd, lambda_su, lambda_sd, sff, pt_coverage, hft, equipment_type";
 
 #[derive(Debug, Serialize, Deserialize, Clone, FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -42,6 +43,22 @@ pub struct Instrument {
     pub notes: String,
     /// M2.9 — 项目归属（project-scoped 仪表台账）。
     pub project_id: Option<i64>,
+    /// IEC 61511-2 — 危险未检测失效率（/h）
+    pub lambda_du: f64,
+    /// 危险已检测失效率（/h）
+    pub lambda_dd: f64,
+    /// 安全未检测失效率（/h）
+    pub lambda_su: f64,
+    /// 安全已检测失效率（/h）
+    pub lambda_sd: f64,
+    /// 安全失效分数 SFF（0~1）
+    pub sff: f64,
+    /// 检验测试覆盖率 PTC（0~1）
+    pub pt_coverage: f64,
+    /// 硬件故障容忍度 HFT（0/1/2）
+    pub hft: i64,
+    /// IEC 61508-2 — 设备类型 type_a（简单）/ type_b（复杂，含软件）
+    pub equipment_type: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -73,6 +90,38 @@ pub struct InstrumentInput {
     pub notes: String,
     /// M2.9 — 必填：仪表归属项目。仪表台账按项目隔离。
     pub project_id: i64,
+    /// IEC 61511-2 — 危险未检测失效率（/h）
+    #[serde(default)]
+    pub lambda_du: f64,
+    /// 危险已检测失效率（/h）
+    #[serde(default)]
+    pub lambda_dd: f64,
+    /// 安全未检测失效率（/h）
+    #[serde(default)]
+    pub lambda_su: f64,
+    /// 安全已检测失效率（/h）
+    #[serde(default)]
+    pub lambda_sd: f64,
+    /// 安全失效分数 SFF（0~1）
+    #[serde(default)]
+    pub sff: f64,
+    /// 检验测试覆盖率 PTC（0~1）
+    #[serde(default = "default_pt_coverage")]
+    pub pt_coverage: f64,
+    /// 硬件故障容忍度 HFT（0/1/2）
+    #[serde(default)]
+    pub hft: i64,
+    /// IEC 61508-2 — 设备类型 type_a/type_b（默认 type_b 保守）
+    #[serde(default = "default_equipment_type")]
+    pub equipment_type: String,
+}
+
+fn default_pt_coverage() -> f64 {
+    1.0
+}
+
+fn default_equipment_type() -> String {
+    "type_b".into()
 }
 
 fn default_sil() -> String {
@@ -158,6 +207,31 @@ fn validate(input: &InstrumentInput) -> AppResult<()> {
     if input.project_id <= 0 {
         return Err(AppError::Validation("project_id is required (>=1)".into()));
     }
+    // IEC 61511-2 失效参数域校验
+    for (name, v) in [
+        ("lambda_du", input.lambda_du),
+        ("lambda_dd", input.lambda_dd),
+        ("lambda_su", input.lambda_su),
+        ("lambda_sd", input.lambda_sd),
+    ] {
+        if v < 0.0 {
+            return Err(AppError::Validation(format!("{name} 不能为负")));
+        }
+    }
+    if !(0.0..=1.0).contains(&input.sff) {
+        return Err(AppError::Validation("sff 必须在 0~1 之间".into()));
+    }
+    if !(0.0..=1.0).contains(&input.pt_coverage) {
+        return Err(AppError::Validation("pt_coverage 必须在 0~1 之间".into()));
+    }
+    if !matches!(input.hft, 0 | 1 | 2) {
+        return Err(AppError::Validation("hft 只能是 0 / 1 / 2".into()));
+    }
+    if !["type_a", "type_b"].contains(&input.equipment_type.as_str()) {
+        return Err(AppError::Validation(
+            "equipment_type 只能是 type_a / type_b".into(),
+        ));
+    }
     Ok(())
 }
 
@@ -174,8 +248,9 @@ pub async fn create_instrument_inner(
         "INSERT INTO instrument
            (org_id, tag, service, kind, role, psv_id, manufacturer, model,
             range_min, range_max, unit, setpoint, sil_target,
-            proof_interval, installed_at, notes, project_id)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            proof_interval, installed_at, notes, project_id,
+            lambda_du, lambda_dd, lambda_su, lambda_sd, sff, pt_coverage, hft, equipment_type)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
     )
     .bind(org_id)
     .bind(&input.tag)
@@ -188,12 +263,20 @@ pub async fn create_instrument_inner(
     .bind(input.range_min)
     .bind(input.range_max)
     .bind(&input.unit)
-    .bind(input.setpoint)
+    .bind(&input.setpoint)
     .bind(&input.sil_target)
     .bind(input.proof_interval)
     .bind(&input.installed_at)
     .bind(&input.notes)
     .bind(input.project_id)
+    .bind(input.lambda_du)
+    .bind(input.lambda_dd)
+    .bind(input.lambda_su)
+    .bind(input.lambda_sd)
+    .bind(input.sff)
+    .bind(input.pt_coverage)
+    .bind(input.hft)
+    .bind(&input.equipment_type)
     .execute(pool)
     .await;
 
@@ -237,12 +320,47 @@ pub async fn update_instrument_inner(
     let before = get_instrument_inner(pool, org_id, id).await?;
     ensure_project_in_org(pool, org_id, input.project_id).await?;
 
+    // 跨项目迁移守卫：仪表若已挂到 SIF（sif_instrument）或报警（alarm_ledger），
+    // 改 project_id 会造成跨项目脏引用。强制先解除关联再迁移。
+    if input.project_id != before.project_id.unwrap_or(0) {
+        let sif_links: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM sif_instrument WHERE instrument_id = ?")
+                .bind(id)
+                .fetch_one(pool)
+                .await?;
+        let alarm_links: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM alarm_ledger WHERE instrument_id = ?")
+                .bind(id)
+                .fetch_one(pool)
+                .await?;
+        if sif_links + alarm_links > 0 {
+            return Err(AppError::Validation(format!(
+                "仪表已关联 {sif_links} 条 SIF 链接与 {alarm_links} 条报警，\
+                 必须先解除所有关联才能跨项目迁移"
+            )));
+        }
+    }
+
+    // 第 6 项防线：SFF / 设备类型变更前，对所有已关联 SIF 做架构约束再校验，
+    // 防止把仪表改低 SFF 或改为 Type B 后，已关联 SIF 静默违反 IEC 61508-2 表 2/3。
+    if input.sff != before.sff || input.equipment_type != before.equipment_type {
+        crate::commands::sifs::check_instrument_sff_change(
+            pool,
+            org_id,
+            id,
+            input.sff,
+            &input.equipment_type,
+        )
+        .await?;
+    }
+
     let n = sqlx::query(
         "UPDATE instrument SET
             tag=?, service=?, kind=?, role=?, psv_id=?, manufacturer=?, model=?,
             range_min=?, range_max=?, unit=?, setpoint=?, sil_target=?,
             proof_interval=?, installed_at=?, notes=?, project_id=?,
-            updated_at=datetime('now')
+            lambda_du=?, lambda_dd=?, lambda_su=?, lambda_sd=?, sff=?, pt_coverage=?, hft=?,
+            equipment_type=?, updated_at=datetime('now')
          WHERE org_id = ? AND id = ?",
     )
     .bind(&input.tag)
@@ -255,12 +373,20 @@ pub async fn update_instrument_inner(
     .bind(input.range_min)
     .bind(input.range_max)
     .bind(&input.unit)
-    .bind(input.setpoint)
+    .bind(&input.setpoint)
     .bind(&input.sil_target)
     .bind(input.proof_interval)
     .bind(&input.installed_at)
     .bind(&input.notes)
     .bind(input.project_id)
+    .bind(input.lambda_du)
+    .bind(input.lambda_dd)
+    .bind(input.lambda_su)
+    .bind(input.lambda_sd)
+    .bind(input.sff)
+    .bind(input.pt_coverage)
+    .bind(input.hft)
+    .bind(&input.equipment_type)
     .bind(org_id)
     .bind(id)
     .execute(pool)
