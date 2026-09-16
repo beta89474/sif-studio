@@ -371,12 +371,12 @@ async fn login_rate_limited_after_10_failures() {
 }
 
 // ---------------------------------------------------------------------------
-// D2 —— 旧版本备份（v4）恢复到当前（v6）服务时自动升级
+// D2 —— 旧版本备份（v4）恢复到当前（v8）服务时自动升级
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 async fn restore_auto_migrates_v4_backup() {
-    // app A（当前版本 v6）：注册 + 建项目 + 备份
+    // app A（当前版本 v8）：注册 + 建项目 + 备份
     let (app_a, _tmp_a) = make_file_app(Some(TOKEN)).await;
     let cookie = register(&app_a, "vera-v4@test.local", "升级公司").await;
     let (st, _) = rpc(
@@ -400,9 +400,10 @@ async fn restore_auto_migrates_v4_backup() {
     .await;
     assert_eq!(st, StatusCode::OK);
 
-    // 把备份"降级"成 v4 形态：抹掉 005/006 账本行 + 丢弃 005 建的 org_invite
-    // 表 + 移除 006 加的 user.must_change_password 列（恢复时副本应自动重放
-    // 005/006 迁移；bundled SQLite ≥3.35 支持 DROP COLUMN）。
+    // 把备份"降级"成 v4 形态：抹掉 005~008 账本行 + 丢弃 005 建的 org_invite
+    // 表 + 移除 006 加的 user.must_change_password 列 + 丢弃 008 建的
+    // alarm_ledger 表（007 仅回填数据无 schema 变更；恢复时副本应自动重放
+    // 005~008 迁移；bundled SQLite ≥3.35 支持 DROP COLUMN）。
     let dir = tempfile::tempdir().unwrap();
     let v4_path = dir.path().join("backup-v4.db");
     std::fs::write(&v4_path, &bytes).unwrap();
@@ -414,7 +415,7 @@ async fn restore_auto_migrates_v4_backup() {
         .connect_with(opts)
         .await
         .unwrap();
-    sqlx::query("DELETE FROM _sqlx_migrations WHERE version IN (5, 6)")
+    sqlx::query("DELETE FROM _sqlx_migrations WHERE version IN (5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)")
         .execute(&pool)
         .await
         .unwrap();
@@ -422,10 +423,48 @@ async fn restore_auto_migrates_v4_backup() {
         .execute(&pool)
         .await
         .unwrap();
+    sqlx::query("DROP TABLE alarm_ledger")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DROP TABLE proof_test")
+        .execute(&pool)
+        .await
+        .unwrap();
+    // 抹掉迁移 016 建的检验规程表，模拟 v4 schema（恢复时副本自动重放 016）
+    sqlx::query("DROP TABLE proof_test_sop")
+        .execute(&pool)
+        .await
+        .unwrap();
+    // 抹掉迁移 015 建的 LOPA 表，模拟 v4 schema（恢复时副本自动重放 015）
+    sqlx::query("DROP TABLE lopa_layer")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DROP TABLE lopa_scenario")
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query("ALTER TABLE user DROP COLUMN must_change_password")
         .execute(&pool)
         .await
         .unwrap();
+    // 抹掉迁移 010/011 加的失效参数/架构/设备类型列，模拟 v4 schema
+    for col in ["lambda_du", "lambda_dd", "lambda_su", "lambda_sd", "sff", "pt_coverage", "hft", "equipment_type"] {
+        sqlx::query(&format!("ALTER TABLE instrument DROP COLUMN {col}"))
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    for col in ["sensor_arch", "logic_arch", "final_arch", "mttr_hours", "beta_factor",
+                "plant", "unit", "equip", "response_time",
+                "safe_state", "reset_req", "bypass_req", "design_standard",
+                "lifecycle_phase"] {
+        sqlx::query(&format!("ALTER TABLE sif DROP COLUMN {col}"))
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
     let latest: i64 = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations")
         .fetch_one(&pool)
         .await
@@ -434,7 +473,7 @@ async fn restore_auto_migrates_v4_backup() {
     pool.close().await;
     let v4_bytes = std::fs::read(&v4_path).unwrap();
 
-    // app B（全新 v6 库）：恢复 v4 备份 → 应自动升级并 200
+    // app B（全新 v8 库）：恢复 v4 备份 → 应自动升级并 200
     let (app_b, _tmp_b) = make_file_app(Some(TOKEN)).await;
     let (ct, body) = multipart_file("file", "v4.db", &v4_bytes);
     let (st, _, resp) = send_raw(
@@ -454,9 +493,12 @@ async fn restore_auto_migrates_v4_backup() {
         String::from_utf8_lossy(&resp)
     );
     let report: Value = serde_json::from_slice(&resp).unwrap();
-    assert_eq!(report["migrationVersion"], 6);
-    assert_eq!(report["tablesCopied"], 13);
+    assert_eq!(report["migrationVersion"], 16);
+    assert_eq!(report["tablesCopied"], 18);
     assert!(report["rowsCopied"]["org_invite"].as_i64().is_some());
+    assert!(report["rowsCopied"]["alarm_ledger"].as_i64().is_some());
+    assert!(report["rowsCopied"]["proof_test"].as_i64().is_some());
+    assert!(report["rowsCopied"]["proof_test_sop"].as_i64().is_some());
 
     // 恢复后登录见到项目
     let (st, _, set_cookie) = send_json(

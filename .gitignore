@@ -49,3 +49,6 @@ data/
 # Generated font subset (derived from system SimHei — NOT redistributable)
 # Regenerate with: npm run font:subset
 src/assets/fonts/*.ttf
+
+# Trae IDE local state
+.trae/

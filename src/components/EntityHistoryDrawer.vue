@@ -123,13 +123,14 @@
 import { computed } from "vue";
 import { useStudioStore } from "../stores/studio";
 
-const props = defineProps<{ entityType: "instrument" | "sif" | "project" }>();
+const props = defineProps<{ entityType: "instrument" | "sif" | "project" | "alarm" }>();
 
 const store = useStudioStore();
 const isInstrument = computed(() => props.entityType === "instrument");
 const label = computed(() =>
   props.entityType === "instrument" ? "仪表"
     : props.entityType === "sif" ? "SIF"
+    : props.entityType === "alarm" ? "报警"
     : "项目",
 );
 
@@ -145,6 +146,9 @@ const displayName = computed(() => {
   }
   if (props.entityType === "project") {
     return store.projects.find((p) => p.id === id)?.code ?? "";
+  }
+  if (props.entityType === "alarm") {
+    return store.alarms.find((a) => a.id === id)?.tag ?? "";
   }
   return "";
 });
@@ -176,6 +180,14 @@ const PROJECT_LABELS: Record<string, string> = {
   finishedAt: "结束日期", notes: "备注",
 };
 
+const ALARM_LABELS: Record<string, string> = {
+  projectId: "项目 ID", tag: "报警位号", instrumentId: "关联仪表",
+  description: "说明", alarmType: "类型", priority: "优先级",
+  category: "类别", setpoint: "设定值", unit: "单位",
+  deadband: "死区", delaySeconds: "延时(秒)", status: "状态",
+  responseAction: "响应动作", notes: "备注",
+};
+
 const ROLE_CN: Record<string, string> = {
   detector: "检测", final: "最终", logic: "逻辑", aux: "旁路",
 };
@@ -183,7 +195,9 @@ const ROLE_CN: Record<string, string> = {
 function fieldLabel(k: string): string {
   const table = isInstrument.value
     ? INSTRUMENT_LABELS
-    : props.entityType === "sif" ? SIF_LABELS : PROJECT_LABELS;
+    : props.entityType === "sif" ? SIF_LABELS
+    : props.entityType === "alarm" ? ALARM_LABELS
+    : PROJECT_LABELS;
   return table[k] ?? k;
 }
 

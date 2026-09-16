@@ -1,12 +1,16 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from "vue-router";
 import Home from "./views/Home.vue";
 import Instruments from "./views/Instruments.vue";
+import Alarms from "./views/Alarms.vue";
 import SifDashboard from "./views/SifDashboard.vue";
 import ProjectsView from "./views/ProjectsView.vue";
+import ProjectDetailView from "./views/ProjectDetailView.vue";
 import DiagramEditor from "./views/DiagramEditor.vue";
 import ImportWizard from "./views/ImportWizard.vue";
 import BypassLedger from "./views/BypassLedger.vue";
 import AuditCenter from "./views/AuditCenter.vue";  // M2.5 — 审计包导出
+import LopaPanel from "./components/LopaPanel.vue";   // LOPA 保护层分析
+import SopPanel from "./components/SopPanel.vue";     // 检验测试规程 SOP
 import LoginView from "./views/LoginView.vue";      // B7 — 认证
 import RegisterView from "./views/RegisterView.vue";
 import SettingsView from "./views/SettingsView.vue"; // C6 — 系统设置
@@ -19,10 +23,23 @@ const routes: RouteRecordRaw[] = [
 
   { path: "/", name: "home", component: Home, meta: { title: "工作台首页" } },
   { path: "/instruments", name: "instruments", component: Instruments, meta: { title: "仪表台账" } },
+  { path: "/alarms", name: "alarms", component: Alarms, meta: { title: "报警台账" } },
   { path: "/import", name: "import", component: ImportWizard, meta: { title: "仪表导入", requiresWrite: true } },
   { path: "/sifs", name: "sifs", component: SifDashboard, meta: { title: "SIF 汇总" } },
   { path: "/projects", name: "projects", component: ProjectsView, meta: { title: "项目" } },
+  // 项目详情页（项目中心化导航）：Tab 通过 ?tab= 查询参数切换；详情页可读，不加 requiresWrite
+  {
+    path: "/projects/:id(\\d+)",
+    name: "project-detail",
+    component: ProjectDetailView,
+    props: (r) => ({ projectId: Number(r.params.id) }),
+    meta: { title: "项目详情" },
+  },
   { path: "/bypass", name: "bypass", component: BypassLedger, meta: { title: "旁路授权台账" } },
+  // LOPA — 保护层分析（IEC 61511-1 Annex E）
+  { path: "/lopa", name: "lopa", component: LopaPanel, meta: { title: "LOPA 保护层分析" } },
+  // 检验测试规程 SOP（IEC 61511-1 §16.2.2）
+  { path: "/sops", name: "sops", component: SopPanel, meta: { title: "检验测试规程" } },
   // M2.5 — 审计中心（导出 audit_log 为 CSV）
   { path: "/audit", name: "audit", component: AuditCenter, meta: { title: "审计中心" } },
   // C6 — 系统设置（legacy 导入 / 整库备份恢复）

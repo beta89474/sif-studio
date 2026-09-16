@@ -10,10 +10,15 @@
         <header class="proj-head">
           <div class="proj-id">
             <div class="proj-code-key">PROJECT · CODE</div>
-            <div class="proj-code mono">{{ p.code }}</div>
+            <!-- 点击进项目详情（项目中心化导航） -->
+            <router-link :to="`/projects/${p.id}`" class="proj-code-link">
+              <div class="proj-code mono">{{ p.code }}</div>
+            </router-link>
           </div>
           <div class="proj-title">
-            <h3 class="proj-name">{{ p.name }}</h3>
+            <router-link :to="`/projects/${p.id}`" class="proj-name-link">
+              <h3 class="proj-name">{{ p.name }}</h3>
+            </router-link>
             <span class="phase" :class="`phase-${p.phase}`">{{ phaseCN(p.phase) }}</span>
             <span class="proj-actions">
               <template v-if="auth.canWrite">
@@ -34,26 +39,12 @@
           <dd v-if="p.notes" class="full">{{ p.notes }}</dd>
         </dl>
 
-        <section class="diagrams">
-          <header class="diagram-head">
-            <span class="dh-title">联锁图 · DIAGRAMS</span>
-            <span class="dh-count mono">{{ diagramsOf(p.id).length }}</span>
-            <button v-if="auth.canWrite" class="sm" @click="newDiagram(p.id)">+ 新建图</button>
-          </header>
-          <ul v-if="diagramsOf(p.id).length">
-            <li v-for="d in diagramsOf(p.id)" :key="d.id">
-              <router-link :to="`/diagram/${d.id}`" class="diagram-link">
-                <span class="dl-key">DWG</span>
-                <span class="mono dl-code">{{ d.code }}</span>
-                <span class="dl-name">{{ d.name }}</span>
-                <span class="dl-size mono">{{ d.sheetSize }} · {{ d.revision }}</span>
-                <span v-if="d.sifCode" class="tag final">{{ d.sifCode }}</span>
-                <span v-if="d.sifSilDesign" class="tag" :class="`sil-${d.sifSilDesign.toLowerCase()}`">SIL {{ d.sifSilDesign }}</span>
-              </router-link>
-            </li>
-          </ul>
-          <div v-else class="muted">暂无图纸，点击「+ 新建图」加一张</div>
-        </section>
+        <!-- 卡片尾部：进入项目详情（台账 / 联锁图 / SIF / 导入 均已收进详情页 Tab） -->
+        <footer class="proj-foot">
+          <router-link :to="`/projects/${p.id}`" class="proj-enter">
+            进入项目 →<span class="mono pf-ref">台账 · 联锁图 · SIF · 导入</span>
+          </router-link>
+        </footer>
       </article>
     </div>
     <div v-else class="empty">
@@ -95,50 +86,17 @@
         </div>
       </div>
     </div>
-
-    <!-- 新建 diagram 弹窗 -->
-    <div v-if="newDgm" class="modal-mask" @click.self="newDgm = null">
-      <div class="modal">
-        <div class="modal-header">
-          <span>新建联锁图 · NEW DIAGRAM</span>
-          <span class="ref">PROJECT-{{ newDgm }}</span>
-        </div>
-        <div class="modal-body">
-          <div class="form">
-            <label>图纸编号 · DWG NO <input v-model="newDiagramForm.code" placeholder="DGM-002" /></label>
-            <label class="full">图名 · TITLE <input v-model="newDiagramForm.name" placeholder="…" /></label>
-            <label>图幅 · SHEET
-              <select v-model="newDiagramForm.sheetSize">
-                <option value="A0">A0 · 1189×841</option>
-                <option value="A1">A1 · 841×594</option>
-                <option value="A2">A2 · 594×420</option>
-                <option value="A3">A3 · 420×297</option>
-                <option value="A4">A4 · 297×210</option>
-              </select>
-            </label>
-            <label>版次 · REV <input v-model="newDiagramForm.revision" /></label>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <span class="ref">ISO 5457</span>
-          <button @click="newDgm = null">取消</button>
-          <button class="primary" :disabled="!newDiagramForm.code || !newDiagramForm.name" @click="saveDiagram">保存</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { useStudioStore, type DiagramSummary, type Project } from "../stores/studio";
-import { useRouter } from "vue-router";
+import { useStudioStore, type Project } from "../stores/studio";
 import { useAuthStore } from "../stores/auth";
 import EntityHistoryDrawer from "../components/EntityHistoryDrawer.vue";
 
 const store = useStudioStore();
 const auth = useAuthStore();
-const router = useRouter();
 
 const query = ref("");
 
@@ -168,23 +126,9 @@ function format(s: string) {
   return s.split(" ")[0];
 }
 
-const diagramsCache = ref<Record<number, DiagramSummary[]>>({});
-async function loadDiagrams(pid: number) {
-  // 用 in 区分"未加载"和"加载过但为空"（cascade 删除后会撞上，truthy 判断把
-  // 空数组当作"已加载"→ 永远显示 0 张图）
-  if (pid in diagramsCache.value) return;
-  diagramsCache.value[pid] = await store.listDiagrams(pid);
-}
-function diagramsOf(pid: number): DiagramSummary[] {
-  return diagramsCache.value[pid] ?? [];
-}
-
 onMounted(async () => {
   if (!store.projects.length) {
     await store.ensureDefaultProject();
-  }
-  for (const p of store.projects) {
-    loadDiagrams(p.id);
   }
 });
 
@@ -246,36 +190,10 @@ async function save() {
   if (editing.value !== null) {
     await store.updateProject(editing.value, payload);
   } else {
-    const p = await store.createProject(payload);
-    if (p) loadDiagrams(p.id);
+    await store.createProject(payload);
   }
   creating.value = false;
   editing.value = null;
-}
-
-const newDgm = ref<number | null>(null);
-const newDiagramForm = reactive({
-  code: "",
-  name: "",
-  sheetSize: "A1",
-  revision: "A0",
-});
-function newDiagram(pid: number) {
-  Object.assign(newDiagramForm, { code: "", name: "", sheetSize: "A1", revision: "A0" });
-  newDgm.value = pid;
-}
-async function saveDiagram() {
-  if (!newDgm.value) return;
-  const d = await store.createDiagram({
-    projectId: newDgm.value,
-    code: newDiagramForm.code,
-    name: newDiagramForm.name,
-    sheetSize: newDiagramForm.sheetSize,
-    revision: newDiagramForm.revision,
-  });
-  newDgm.value = null;
-  diagramsCache.value[d.projectId] = await store.listDiagrams(d.projectId);
-  router.push(`/diagram/${d.id}`);
 }
 </script>
 
@@ -309,6 +227,11 @@ async function saveDiagram() {
   font-weight: 700;
   color: var(--ink-1);
 }
+/* 项目编号 / 名称 → 详情页链接 */
+.proj-code-link,
+.proj-name-link { text-decoration: none; }
+.proj-code-link:hover .proj-code,
+.proj-name-link:hover .proj-name { color: var(--acc); }
 .proj-title {
   display: flex;
   align-items: center;
@@ -351,77 +274,27 @@ async function saveDiagram() {
 /* 元数据 */
 .meta { padding: 0 var(--s-4); }
 
-/* 图纸列表 */
-.diagrams {
-  margin: 0 var(--s-4) var(--s-4);
-  border-top: var(--rule-fine) solid var(--rule-2);
-  padding-top: var(--s-3);
-}
-.diagram-head {
+/* 卡片尾部：进入项目详情 */
+.proj-foot {
   display: flex;
-  align-items: center;
+  justify-content: flex-end;
+  border-top: var(--rule-fine) solid var(--rule-2);
+  padding: var(--s-2) var(--s-4);
+}
+.proj-enter {
+  display: inline-flex;
+  align-items: baseline;
   gap: var(--s-2);
-  margin-bottom: var(--s-2);
-}
-.dh-title {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--ink-3);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-.dh-count {
-  font-weight: 700;
-  color: var(--ink-1);
-  padding: 0 var(--s-2);
-  border: var(--rule-fine) solid var(--rule-2);
-  background: var(--paper);
-}
-.diagram-head button { margin-left: auto; }
-
-.diagrams ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  border: var(--rule-fine) solid var(--rule-2);
-}
-.diagrams li {
-  border-bottom: var(--rule-fine) solid var(--rule-2);
-}
-.diagrams li:last-child { border-bottom: 0; }
-
-.diagram-link {
-  display: grid;
-  grid-template-columns: 40px 110px 1fr auto auto auto;
-  gap: var(--s-2);
-  align-items: center;
-  padding: var(--s-2) var(--s-3);
-  color: var(--ink-1);
-  text-decoration: none;
   font-size: var(--fs-sm);
-  border-left: 4px solid transparent;
-}
-.diagram-link:hover {
-  background: var(--paper-2);
-  border-left-color: var(--acc);
+  font-weight: 600;
+  color: var(--acc);
   text-decoration: none;
 }
-.dl-key {
-  font-family: var(--font-mono);
+.proj-enter:hover { text-decoration: underline; }
+.pf-ref {
   font-size: 9px;
+  letter-spacing: 0.12em;
   color: var(--ink-3);
-  letter-spacing: 0.16em;
-}
-.dl-code {
-  font-weight: 600;
-  color: var(--ink-1);
-}
-.dl-name { color: var(--ink-2); }
-.dl-size {
-  font-size: var(--fs-xs);
-  color: var(--ink-3);
-  padding: 1px 6px;
-  background: var(--paper-3);
-  border: var(--rule-fine) solid var(--rule-2);
+  text-transform: uppercase;
 }
 </style>

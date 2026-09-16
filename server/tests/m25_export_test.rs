@@ -61,6 +61,14 @@ fn inst_input(tag: &str, role: &str, sil: &str) -> InstrumentInput {
         setpoint: Some(50.0),
         sil_target: sil.into(),
         proof_interval: 12,
+        lambda_du: 0.0,
+        lambda_dd: 0.0,
+        lambda_su: 0.0,
+        lambda_sd: 0.0,
+        sff: 0.0,
+        pt_coverage: 1.0,
+        hft: 0,
+        equipment_type: "type_b".into(),
         installed_at: "2026-01-01".into(),
         notes: "".into(),
         // M2.9 — 测试 helper 占位 project_id=1，由用例在 setup 中覆盖
@@ -86,11 +94,17 @@ fn sif_input(project_id: i64, code: &str, name: &str) -> SifInput {
         code: code.into(),
         name: name.into(),
         description: "".into(),
-        sil_design: "B".into(),
+        sil_design: "NA".into(),
         sil_verified: "NA".into(),
         demand_mode: "low".into(),
         pfdavg_target: Some(0.01),
         proof_interval: 12,
+    sensor_arch: "1oo1".into(),
+    logic_arch: "1oo1".into(),
+    final_arch: "1oo1".into(),
+    mttr_hours: 8.0,
+    beta_factor: 0.10,
+    ..Default::default()
     }
 }
 

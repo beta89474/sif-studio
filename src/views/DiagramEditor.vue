@@ -268,13 +268,15 @@ async function pushProjectInstrumentsToIframe() {
 
 /**
  * M2.9 — 把 store 里的 Instrument[] 构造成 M0 editor.html 期望的分组格式。
- *  - 过滤掉 logic / aux 角色（它们是求解器/旁路，不是现场元件，不进 picker）
+ *  - 四种角色全部进 picker：detector / final / logic / aux
  *  - 按 kind 简单分桶，桶内按 tag 升序
  *  - 把 SQL Instrument 字段映射到 M0 块类型（type 字段）：
  *      detector: 变送器/测量 → ai、开关/火焰/位置 → di、按钮 → hs、系统命令 → comm
  *      final: 阀类 → xv、电机 → motor、电磁阀 → sov、报警 → alarm、其余 → do
- *  - M0 picker 只在「检测元件」列（col=0）展开；最终元件列走通用块（xv/motor/sov/alarm），
- *    这里仍把 final 也投出去，让用户能在搜索框找到；列选择器不展开但单点照样能 addFromDb。
+ *      logic: 表决器 → vote、与门 → and、或门 → or、非门 → not、锁存 → rs、计时 → ton
+ *      aux: 旁路 → bypass、允许 → perm、首出 → firstout、复位 → reset
+ *  - M0 picker 只在「检测元件」列（col=0）展开；其余列走通用块，
+ *    这里把四种角色都投出去，让用户能在搜索框找到；列选择器不展开但单点照样能 addFromDb。
  */
 interface PickerItem {
   id: number | null;
@@ -287,9 +289,8 @@ interface PickerItem {
 }
 
 function buildInstrumentGroups(list: Instrument[]): { g: string; list: PickerItem[] }[] {
-  const filtered = (list || []).filter(
-    (i) => i.role === "detector" || i.role === "final",
-  );
+  // 四种角色全部进 picker
+  const filtered = list || [];
   const buckets = new Map<string, PickerItem[]>();
   filtered
     .slice()
@@ -306,7 +307,7 @@ function buildInstrumentGroups(list: Instrument[]): { g: string; list: PickerIte
         desc: ins.service || ins.notes || "",
         type: t,
         contact: contactFor(ins),
-        loc: "现场",
+        loc: ins.role === "logic" ? "机柜室" : ins.role === "aux" ? "机柜室" : "现场",
         unit: ins.unit || "",
       });
       buckets.set(label, arr);
@@ -343,7 +344,47 @@ function mapInstrumentToType(ins: Instrument): string | null {
     if (/^UA|^XY|^HA/.test(tag)) return "alarm";
     return "do"; // 最终元件兜底
   }
-  return null; // logic / aux 不进 picker
+  if (ins.role === "logic") {
+    // 逻辑求解器：继电器/表决/比较/逻辑组合/时序/锁存
+    if (/表决|投票|voting|m.{1,2}n/.test(k)) return "vote";
+    if (/比较|compare|cmp/.test(k)) return "cmp";
+    if (/与门|and/.test(k)) return "and";
+    if (/或门|or/.test(k)) return "or";
+    if (/非门|not/.test(k)) return "not";
+    if (/异或|xor/.test(k)) return "xor";
+    if (/与非|nand/.test(k)) return "nand";
+    if (/或非|nor/.test(k)) return "nor";
+    if (/允许|permit|perm/.test(k)) return "perm";
+    if (/锁存|latch|保持|rs锁存|sr锁存/.test(k)) return "rs";
+    if (/延时|定时|timer|ton|tof/.test(k)) return "ton";
+    if (/计数|count|counter/.test(k)) return "ctu";
+    if (/首出|first.?out/.test(k)) return "firstout";
+    // tag 前缀兜底
+    if (/^AND/i.test(tag)) return "and";
+    if (/^OR/i.test(tag)) return "or";
+    if (/^NOT/i.test(tag)) return "not";
+    if (/^XOR/i.test(tag)) return "xor";
+    if (/^RS[-_]?/i.test(tag)) return "rs";
+    if (/^TON[-_]?/i.test(tag)) return "ton";
+    if (/^CTU[-_]?/i.test(tag)) return "ctu";
+    if (/^FO[-_]?/i.test(tag)) return "firstout";
+    return "and"; // 逻辑元件兜底为与门
+  }
+  if (ins.role === "aux") {
+    // 旁路/允许设备：维护旁路、允许条件、首出记录、手动复位
+    if (/旁路|旁通|bypass/.test(k)) return "bypass";
+    if (/允许|permit|perm/.test(k)) return "perm";
+    if (/首出|first.?out/.test(k)) return "firstout";
+    if (/复位|reset/.test(k)) return "reset";
+    // tag 前缀兜底
+    if (/^BYP/i.test(tag)) return "bypass";
+    if (/^PERM/i.test(tag)) return "perm";
+    if (/^FO[-_]?/i.test(tag)) return "firstout";
+    if (/^RST[-_]?/i.test(tag)) return "reset";
+    if (/^HS[-_]?R/i.test(tag)) return "reset";
+    return "bypass"; // 旁路设备兜底
+  }
+  return null;
 }
 
 function kindGroupLabel(kind: string, type: string): string {
@@ -361,6 +402,23 @@ function kindGroupLabel(kind: string, type: string): string {
     sov: "电磁阀",
     do: "数字输出",
     ao: "模拟输出",
+    // 逻辑求解器
+    vote: "表决器 MooN",
+    cmp: "比较器",
+    and: "与门 AND",
+    or: "或门 OR",
+    not: "非门 NOT",
+    xor: "异或 XOR",
+    nand: "与非 NAND",
+    nor: "或非 NOR",
+    perm: "允许条件",
+    rs: "RS 锁存",
+    ton: "延时通",
+    ctu: "计数器",
+    firstout: "首出记录",
+    // 旁路/复位
+    bypass: "维护旁路",
+    reset: "手动复位",
   };
   return fallback[type] || type;
 }

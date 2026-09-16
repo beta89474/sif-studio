@@ -148,10 +148,10 @@ pub async fn latest_migration_version(pool: &SqlitePool) -> AppResult<i64> {
 // C2 —— 恢复
 // ---------------------------------------------------------------------------
 
-/// 恢复必需的 13 张表（与迁移 001-005 对应）。
+/// 恢复必需的 18 张表（与迁移 001-016 对应）。
 /// 顺序即回灌顺序（父表在前）；清表时反向迭代（子表在前），
 /// 这样全过程外键约束保持开启也不冲突，无需 PRAGMA foreign_keys=OFF。
-const RESTORE_TABLES: [&str; 13] = [
+const RESTORE_TABLES: [&str; 18] = [
     "org",
     "user",
     "org_member",
@@ -160,11 +160,16 @@ const RESTORE_TABLES: [&str; 13] = [
     "project",
     "sif",
     "instrument",
+    "alarm_ledger",
+    "proof_test_sop",
+    "proof_test",
     "diagram",
     "sif_instrument",
     "bypass_record",
     "service_ticket",
     "audit_log",
+    "lopa_scenario",
+    "lopa_layer",
 ];
 
 #[derive(Debug, serde::Serialize)]
@@ -176,7 +181,7 @@ pub struct RestoreReport {
     pub rows_copied: HashMap<String, i64>,
 }
 
-/// 迁移后校验备份：完整性 OK + 13 张表齐全；返回已应用的最新迁移版本。
+/// 迁移后校验备份：完整性 OK + 18 张表齐全；返回已应用的最新迁移版本。
 async fn validate_backup(pool: &SqlitePool) -> AppResult<i64> {
     pragma_check(pool, false)
         .await
@@ -277,7 +282,7 @@ async fn copy_restore_tables(
         "sif".into(),
         copy_table!(
             tx,
-            "id, project_id, code, name, description, sil_design, sil_verified, demand_mode, pfdavg_target, proof_interval, created_at, updated_at, org_id",
+            "id, project_id, code, name, description, sil_design, sil_verified, demand_mode, pfdavg_target, proof_interval, sensor_arch, logic_arch, final_arch, mttr_hours, beta_factor, plant, unit, equip, response_time, safe_state, reset_req, bypass_req, design_standard, lifecycle_phase, created_at, updated_at, org_id",
             "sif"
         ),
     );
@@ -285,8 +290,32 @@ async fn copy_restore_tables(
         "instrument".into(),
         copy_table!(
             tx,
-            "id, tag, service, kind, role, psv_id, manufacturer, model, range_min, range_max, unit, setpoint, sil_target, proof_interval, installed_at, notes, created_at, updated_at, project_id, org_id",
+            "id, tag, service, kind, role, psv_id, manufacturer, model, range_min, range_max, unit, setpoint, sil_target, proof_interval, installed_at, notes, created_at, updated_at, project_id, org_id, lambda_du, lambda_dd, lambda_su, lambda_sd, sff, pt_coverage, hft, equipment_type",
             "instrument"
+        ),
+    );
+    rows_copied.insert(
+        "alarm_ledger".into(),
+        copy_table!(
+            tx,
+            "id, org_id, project_id, tag, instrument_id, description, alarm_type, priority, category, setpoint, unit, deadband, delay_seconds, status, response_action, notes, created_at, updated_at",
+            "alarm_ledger"
+        ),
+    );
+    rows_copied.insert(
+        "proof_test_sop".into(),
+        copy_table!(
+            tx,
+            "id, org_id, code, title, version, doc_ref, scope, test_method, pass_criteria, notes, created_at, updated_at",
+            "proof_test_sop"
+        ),
+    );
+    rows_copied.insert(
+        "proof_test".into(),
+        copy_table!(
+            tx,
+            "id, org_id, sif_id, tested_at, result, tested_by, next_due_at, findings, notes, created_at, sop_id",
+            "proof_test"
         ),
     );
     rows_copied.insert(
@@ -319,6 +348,22 @@ async fn copy_restore_tables(
             tx,
             "id, project_id, sif_id, instrument_id, kind, title, detail, opened_by, opened_at, closed_at, severity, org_id",
             "service_ticket"
+        ),
+    );
+    rows_copied.insert(
+        "lopa_scenario".into(),
+        copy_table!(
+            tx,
+            "id, org_id, project_id, sif_id, code, title, hazard, cause, consequence, severity, init_freq, risk_tol, sil_claim, notes, created_at, updated_at",
+            "lopa_scenario"
+        ),
+    );
+    rows_copied.insert(
+        "lopa_layer".into(),
+        copy_table!(
+            tx,
+            "id, org_id, scenario_id, seq, layer_type, description, pfd, credit, created_at",
+            "lopa_layer"
         ),
     );
     rows_copied.insert(
@@ -674,6 +719,8 @@ pub async fn import_legacy_db(
             report.sifs.skipped += 1;
             continue;
         }
+        // 注意：legacy 源库可能早于 010/011/012，仅 SELECT/INSERT 最旧公共列集合，
+        // 新列（表决架构/MTTR/β）由目标表 DEFAULT 兜底
         let new_id = sqlx::query(
             "INSERT INTO sif
                 (project_id, code, name, description, sil_design, sil_verified, demand_mode,

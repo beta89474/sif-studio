@@ -40,6 +40,22 @@ export interface Instrument {
   notes: string;
   /** M2.9 — 项目归属（仪表台账按项目隔离） */
   projectId: number | null;
+  /** IEC 61511-2 — 危险未检测失效率（/h） */
+  lambdaDu: number;
+  /** 危险已检测失效率（/h） */
+  lambdaDd: number;
+  /** 安全未检测失效率（/h） */
+  lambdaSu: number;
+  /** 安全已检测失效率（/h） */
+  lambdaSd: number;
+  /** 安全失效分数 SFF（0~1） */
+  sff: number;
+  /** 检验测试覆盖率 PTC（0~1） */
+  ptCoverage: number;
+  /** 硬件故障容忍度 HFT（0/1/2） */
+  hft: number;
+  /** IEC 61508-2 — 设备类型 type_a（简单元件）/ type_b（复杂元件） */
+  equipmentType: string;
 }
 
 export interface Project {
@@ -51,6 +67,29 @@ export interface Project {
   phase: string;
   startedAt: string;
   finishedAt: string;
+  notes: string;
+}
+
+/** 报警台账（ISA-18.2）—— 与联锁图/SIF 无关，按项目隔离，可选关联仪表 */
+export interface Alarm {
+  id: number;
+  projectId: number;
+  tag: string;
+  instrumentId: number | null;
+  description: string;
+  /** HH | H | LL | L | DEV | RATE | DISC | OTHER */
+  alarmType: string;
+  /** critical | high | medium | low */
+  priority: string;
+  /** process | equipment | safety */
+  category: string;
+  setpoint: number | null;
+  unit: string;
+  deadband: number | null;
+  delaySeconds: number;
+  /** normal | active | bypassed | shelved */
+  status: string;
+  responseAction: string;
   notes: string;
 }
 
@@ -94,6 +133,32 @@ export interface SifSummary {
   demandMode: string;
   pfdavgTarget: number | null;
   proofInterval: number;
+  /** IEC 61511-2 — 子系统表决架构 */
+  sensorArch: string;
+  logicArch: string;
+  finalArch: string;
+  /** 平均修复时间 MTTR（小时） */
+  mttrHours: number;
+  /** 共因失效因子 β（0~1） */
+  betaFactor: number;
+  /** SRS — 项目/装置 */
+  plant: string;
+  /** SRS — 工艺单元 */
+  unit: string;
+  /** SRS — 关联设备 */
+  equip: string;
+  /** SRS — 响应时间要求 */
+  responseTime: string;
+  /** SRS — 安全状态定义 */
+  safeState: string;
+  /** SRS — 复位要求 */
+  resetReq: string;
+  /** SRS — 旁路管理 */
+  bypassReq: string;
+  /** SRS — 设计依据标准 */
+  designStandard: string;
+  /** SIF 生命周期阶段（design/construction/commissioning/operation/closed） */
+  lifecyclePhase: string;
   detectorCount: number;
   finalCount: number;
   logicCount: number;
@@ -102,6 +167,20 @@ export interface SifSummary {
   detectorsCsv: string;
   finalsCsv: string;
   diagramsCsv: string;
+  /** 运行时计算：PFDavg（null = 数据不足） */
+  pfdavgCalculated: number | null;
+  /** 运行时计算：PFH（高需求/连续，1/h，null = 数据不足） */
+  pfhCalculated: number | null;
+  /** 运行时计算：达到的 SIL（NA/A/B/C/D） */
+  silAchieved: string;
+  /** 运行时计算：子系统 PFD/PFH 组件 JSON */
+  pfdComponents: string;
+  /** silVerified 与 silAchieved 一致性：pending/unverified/verified/overclaimed/downgraded */
+  silVerifyStatus: string;
+  /** Route 1H — 架构与实际通道数匹配状态：matched/degraded/empty */
+  sensorMatch: string;
+  logicMatch: string;
+  finalMatch: string;
 }
 
 /** SIF 基础字段（create/update/get 返回）；不含跨图汇总（参考 SifSummary） */
@@ -116,6 +195,20 @@ export interface SifBasic {
   demandMode: string;
   pfdavgTarget: number | null;
   proofInterval: number;
+  sensorArch: string;
+  logicArch: string;
+  finalArch: string;
+  mttrHours: number;
+  betaFactor: number;
+  plant: string;
+  unit: string;
+  equip: string;
+  responseTime: string;
+  safeState: string;
+  resetReq: string;
+  bypassReq: string;
+  designStandard: string;
+  lifecyclePhase: string;
 }
 
 export interface SifLink {
@@ -286,10 +379,175 @@ export interface AuditEntry {
   note: string;
 }
 
+// ============================================================================
+// 检验测试台账（IEC 61511-1 §16.3）
+// ============================================================================
+
+/** 检验测试记录（nextDueAt = testedAt + SIF.proofInterval 月） */
+export interface ProofTest {
+  id: number;
+  sifId: number;
+  sifCode: string;
+  projectCode: string;
+  testedAt: string;
+  /** pass | fail | conditional */
+  result: string;
+  testedBy: string;
+  nextDueAt: string;
+  findings: string;
+  notes: string;
+  createdAt: string;
+  /** 关联的检验规程 SOP（§16.2.2） */
+  sopId: number | null;
+  sopCode: string | null;
+  sopTitle: string | null;
+  sopVersion: string | null;
+  /** SQL CASE：overdue（最新一条且 nextDueAt < today）| current */
+  status: string;
+  /** 是否按成文规程执行 */
+  sopLinked: boolean;
+}
+
+/** 逾期检验计数（供横幅） */
+export interface OverdueProofTestStatus {
+  count: number;
+  oldestOverdueDays: number | null;
+}
+
+/** 检验测试新建/更新输入 */
+export interface ProofTestInput {
+  sifId: number;
+  testedAt: string;
+  result?: string;
+  testedBy?: string;
+  findings?: string;
+  notes?: string;
+  /** 关联的检验规程 id */
+  sopId?: number | null;
+}
+
+// ============================================================================
+// 检验测试规程 SOP（IEC 61511-1 §16.2.2）
+// ============================================================================
+
+/** 检验规程（含被检验记录引用计数） */
+export interface ProofTestSop {
+  id: number;
+  orgId: number;
+  code: string;
+  title: string;
+  version: string;
+  docRef: string;
+  scope: string;
+  testMethod: string;
+  passCriteria: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+  usageCount: number;
+}
+
+/** 检验规程新建/更新输入 */
+export interface ProofTestSopInput {
+  code: string;
+  title: string;
+  version?: string;
+  docRef?: string;
+  scope?: string;
+  testMethod?: string;
+  passCriteria?: string;
+  notes?: string;
+}
+
+// ============================================================================
+// LOPA（保护层分析）—— IEC 61511-1 Annex E
+// ============================================================================
+
+/** LOPA 场景（含保护层 COUNT 聚合） */
+export interface LopaScenario {
+  id: number;
+  orgId: number;
+  projectId: number;
+  sifId: number | null;
+  projectCode: string;
+  sifCode: string | null;
+  code: string;
+  title: string;
+  hazard: string;
+  cause: string;
+  consequence: string;
+  /** minor | medium | major | catastrophic */
+  severity: string;
+  initFreq: number | null;
+  riskTol: number | null;
+  /** NA | A | B | C | D */
+  silClaim: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+  layerCount: number;
+  // ---- 运行时 gap analysis（不落库） ----
+  /** 关联 SIF 的设计目标 / 验证值 */
+  sifSilDesign: string | null;
+  sifSilVerified: string | null;
+  /** RRF = initFreq / riskTol */
+  rrfRequired: number | null;
+  /** RRF 区间反推的 SIL（NA/A/B/C/D） */
+  silFromRrf: string | null;
+  /** 关联 SIF 计算出的 silAchieved */
+  sifSilAchieved: string | null;
+  /** unlinked | na | pending_data | covered | gap | drift */
+  gapStatus: string;
+  /** 人类可读对照说明 */
+  gapMessage: string;
+}
+
+/** 新建/更新场景输入 */
+export interface LopaScenarioInput {
+  projectId: number;
+  sifId?: number | null;
+  code: string;
+  title: string;
+  hazard?: string;
+  cause?: string;
+  consequence?: string;
+  /** minor | medium | major | catastrophic */
+  severity?: string;
+  initFreq?: number | null;
+  riskTol?: number | null;
+  /** NA | A | B | C | D */
+  silClaim?: string;
+  notes?: string;
+}
+
+/** 独立保护层 */
+export interface LopaLayer {
+  id: number;
+  orgId: number;
+  scenarioId: number;
+  seq: number;
+  /** ipl | bypass | alarm | procedural */
+  layerType: string;
+  description: string;
+  pfd: number | null;
+  credit: number;
+  createdAt: string;
+}
+
+/** 新建/更新保护层输入 */
+export interface LopaLayerInput {
+  scenarioId: number;
+  seq?: number;
+  layerType: string;
+  description?: string;
+  pfd?: number | null;
+  credit?: number;
+}
+
 /** 抽屉打开的实体目标 */
 export interface HistoryTarget {
-  /** 'instrument' | 'sif' | 'project' */
-  kind: "instrument" | "sif" | "project";
+  /** 'instrument' | 'sif' | 'project' | 'alarm' */
+  kind: "instrument" | "sif" | "project" | "alarm";
   id: number;
 }
 
@@ -391,6 +649,8 @@ function asError(e: unknown): InvokeError {
 interface StudioState {
   meta: AppMeta | null;
   instruments: Instrument[];
+  /** 报警台账（跨项目全量；项目视图在前端按 projectId 过滤） */
+  alarms: Alarm[];
   projects: Project[];
   diagramsByProject: Record<number, DiagramSummary[]>;
   sifSummary: SifSummary[];
@@ -412,6 +672,15 @@ interface StudioState {
   overdueBypassStatus: OverdueBypassStatus;
   /** 60s 轮询 setInterval id；actions 私有 */
   _overdueTimer: number;
+  // ---- 检验测试（IEC 61511-1 §16.3）----
+  /** 按 sifId 过滤后的检验记录（展开 SIF 时拉取） */
+  proofTests: ProofTest[];
+  /** 当前检验列表锁定的 SIF（null = 全量） */
+  proofTestsFilterSifId: number | null;
+  /** 全站逾期检验计数（横幅用，60s 轮询刷新） */
+  overdueProofTestStatus: OverdueProofTestStatus;
+  // ---- 检验规程 SOP（IEC 61511-1 §16.2.2）----
+  proofTestSops: ProofTestSop[];
   // ---- M2.3/M2.4 通用修改历史（M2.3 仅 instrument；M2.4 扩到 sif + project）----
   entityHistory: AuditEntry[];
   /** 当前打开抽屉的目标；null = 抽屉关闭 */
@@ -426,12 +695,18 @@ interface StudioState {
   // ---- M2.7 审计包图表（PDF 报告增补图表用）----
   auditCharts: AuditCharts | null;
   auditChartsLoading: boolean;
+  // ---- LOPA（IEC 61511-1 Annex E）----
+  lopaScenarios: LopaScenario[];
+  lopaFilterProjectId: number | null;
+  lopaLayers: LopaLayer[];
+  lopaLayersForScenarioId: number | null;
 }
 
 export const useStudioStore = defineStore("studio", {
   state: (): StudioState => ({
     meta: null,
     instruments: [],
+    alarms: [],
     projects: [],
     diagramsByProject: {},
     sifSummary: [],
@@ -451,6 +726,11 @@ export const useStudioStore = defineStore("studio", {
     bypassesLoading: false,
     overdueBypassStatus: { count: 0, oldestOverdueHours: null },
     _overdueTimer: 0,
+    // 检验测试（IEC 61511-1 §16.3）
+    proofTests: [],
+    proofTestsFilterSifId: null as number | null,
+    overdueProofTestStatus: { count: 0, oldestOverdueDays: null },
+    proofTestSops: [],
     // M2.4 通用 history 初始状态
     entityHistory: [],
     entityHistoryFor: null,
@@ -464,6 +744,11 @@ export const useStudioStore = defineStore("studio", {
     // M2.7 图表初始状态
     auditCharts: null,
     auditChartsLoading: false,
+    // LOPA（IEC 61511-1 Annex E）初始状态
+    lopaScenarios: [],
+    lopaFilterProjectId: null as number | null,
+    lopaLayers: [],
+    lopaLayersForScenarioId: null as number | null,
   }),
 
   getters: {
@@ -505,6 +790,7 @@ export const useStudioStore = defineStore("studio", {
           this.refreshSifSummary(),
           this.refreshBypasses("all"),
           this.refreshOverdueBypassStatus(),
+          this.refreshOverdueProofTests(),
         ]);
         // 启动 60s 轮询；count=0 也轮询（轻量）
         this.startOverduePolling();
@@ -551,6 +837,7 @@ export const useStudioStore = defineStore("studio", {
       this._overdueTimer = window.setInterval(() => {
         // 轮询时拉详情也拉一次（让 Home 卡也更新）
         this.refreshOverdueBypassStatus();
+        this.refreshOverdueProofTests();
       }, 60_000);
     },
     stopOverduePolling() {
@@ -558,6 +845,142 @@ export const useStudioStore = defineStore("studio", {
         clearInterval(this._overdueTimer);
         this._overdueTimer = 0;
       }
+    },
+
+    // ------------------------------------------------------------------
+    // 检验测试（IEC 61511-1 §16.3）
+    // ------------------------------------------------------------------
+    async refreshOverdueProofTests() {
+      try {
+        const s = await invoke<OverdueProofTestStatus>("count_overdue_proof_tests");
+        this.overdueProofTestStatus = {
+          count: Number(s?.count ?? 0),
+          oldestOverdueDays: s?.oldestOverdueDays ?? null,
+        };
+      } catch (e) {
+        this.lastError = asError(e);
+      }
+    },
+
+    async refreshProofTests(sifId?: number) {
+      this.proofTestsFilterSifId = sifId ?? null;
+      this.proofTests = await invoke<ProofTest[]>("list_proof_tests", {
+        sifId: sifId ?? null,
+      });
+    },
+
+    async createProofTest(input: ProofTestInput): Promise<ProofTest> {
+      const pt = await invoke<ProofTest>("create_proof_test", { input });
+      await this.refreshProofTests(this.proofTestsFilterSifId ?? undefined);
+      await this.refreshOverdueProofTests();
+      return pt;
+    },
+
+    async updateProofTest(id: number, input: ProofTestInput): Promise<ProofTest> {
+      const pt = await invoke<ProofTest>("update_proof_test", { id, input });
+      await this.refreshProofTests(this.proofTestsFilterSifId ?? undefined);
+      await this.refreshOverdueProofTests();
+      return pt;
+    },
+
+    async deleteProofTest(id: number) {
+      await invoke("delete_proof_test", { id });
+      await this.refreshProofTests(this.proofTestsFilterSifId ?? undefined);
+      await this.refreshOverdueProofTests();
+    },
+
+    // ------------------------------------------------------------------
+    // 检验规程 SOP（IEC 61511-1 §16.2.2）
+    // ------------------------------------------------------------------
+    async refreshProofTestSops() {
+      this.proofTestSops = await invoke<ProofTestSop[]>("list_proof_test_sops");
+    },
+
+    async createProofTestSop(input: ProofTestSopInput): Promise<ProofTestSop> {
+      const sop = await invoke<ProofTestSop>("create_proof_test_sop", { input });
+      await this.refreshProofTestSops();
+      return sop;
+    },
+
+    async updateProofTestSop(id: number, input: ProofTestSopInput): Promise<ProofTestSop> {
+      const sop = await invoke<ProofTestSop>("update_proof_test_sop", { id, input });
+      await this.refreshProofTestSops();
+      // 规程变更后刷新检验列表（快照 version/title 可能变）
+      await this.refreshProofTests(this.proofTestsFilterSifId ?? undefined);
+      return sop;
+    },
+
+    async deleteProofTestSop(id: number, force = false) {
+      await invoke("delete_proof_test_sop", { id, force });
+      await this.refreshProofTestSops();
+      await this.refreshProofTests(this.proofTestsFilterSifId ?? undefined);
+    },
+
+    // ------------------------------------------------------------------
+    // LOPA（IEC 61511-1 Annex E）
+    // ------------------------------------------------------------------
+    async refreshLopaScenarios(projectId?: number) {
+      this.lopaFilterProjectId = projectId ?? null;
+      this.lopaScenarios = await invoke<LopaScenario[]>("list_lopa_scenarios", {
+        projectId: projectId ?? null,
+      });
+    },
+
+    async createLopaScenario(input: LopaScenarioInput): Promise<LopaScenario> {
+      const s = await invoke<LopaScenario>("create_lopa_scenario", { input });
+      await this.refreshLopaScenarios(this.lopaFilterProjectId ?? undefined);
+      return s;
+    },
+
+    async updateLopaScenario(id: number, input: LopaScenarioInput): Promise<LopaScenario> {
+      const s = await invoke<LopaScenario>("update_lopa_scenario", { id, input });
+      await this.refreshLopaScenarios(this.lopaFilterProjectId ?? undefined);
+      if (this.lopaLayersForScenarioId === id) {
+        await this.refreshLopaLayers(id);
+      }
+      return s;
+    },
+
+    async deleteLopaScenario(id: number) {
+      await invoke("delete_lopa_scenario", { id });
+      await this.refreshLopaScenarios(this.lopaFilterProjectId ?? undefined);
+      if (this.lopaLayersForScenarioId === id) {
+        this.lopaLayers = [];
+        this.lopaLayersForScenarioId = null;
+      }
+    },
+
+    async refreshLopaLayers(scenarioId: number) {
+      this.lopaLayersForScenarioId = scenarioId;
+      this.lopaLayers = await invoke<LopaLayer[]>("list_lopa_layers", {
+        scenarioId,
+      });
+    },
+
+    async createLopaLayer(input: LopaLayerInput): Promise<LopaLayer> {
+      const l = await invoke<LopaLayer>("create_lopa_layer", { input });
+      if (this.lopaLayersForScenarioId === input.scenarioId) {
+        await this.refreshLopaLayers(input.scenarioId);
+      }
+      // 刷新场景的 layerCount
+      await this.refreshLopaScenarios(this.lopaFilterProjectId ?? undefined);
+      return l;
+    },
+
+    async updateLopaLayer(id: number, input: LopaLayerInput): Promise<LopaLayer> {
+      const l = await invoke<LopaLayer>("update_lopa_layer", { id, input });
+      if (this.lopaLayersForScenarioId === input.scenarioId) {
+        await this.refreshLopaLayers(input.scenarioId);
+      }
+      return l;
+    },
+
+    async deleteLopaLayer(id: number, scenarioId: number) {
+      await invoke("delete_lopa_layer", { id });
+      if (this.lopaLayersForScenarioId === scenarioId) {
+        await this.refreshLopaLayers(scenarioId);
+      }
+      await this.refreshLopaScenarios(this.lopaFilterProjectId ?? undefined);
     },
 
     // ------------------------------------------------------------------
@@ -619,6 +1042,48 @@ export const useStudioStore = defineStore("studio", {
       await this._refreshOpenInstrumentHistoryIfAny(id);
     },
 
+    // ------------------------------------------------------------------
+    // Alarms（报警台账，ISA-18.2；项目隔离，与联锁图/SIF 无关）
+    // ------------------------------------------------------------------
+    async refreshAlarms() {
+      this.alarms = await invoke<Alarm[]>("list_alarms");
+    },
+
+    async createAlarm(input: Omit<Alarm, "id">): Promise<Alarm> {
+      if (!input.projectId) {
+        throw new Error("createAlarm: projectId is required（报警台账按项目隔离）");
+      }
+      const created = await invoke<Alarm>("create_alarm", { input });
+      await this.refreshAlarms();
+      await this._refreshOpenAlarmHistoryIfAny(created.id);
+      return created;
+    },
+
+    async updateAlarm(id: number, input: Omit<Alarm, "id">): Promise<Alarm> {
+      if (!input.projectId) {
+        throw new Error("updateAlarm: projectId is required");
+      }
+      const updated = await invoke<Alarm>("update_alarm", { id, input });
+      await this.refreshAlarms();
+      await this._refreshOpenAlarmHistoryIfAny(id);
+      return updated;
+    },
+
+    async deleteAlarm(id: number) {
+      await invoke("delete_alarm", { id });
+      await this.refreshAlarms();
+      await this._refreshOpenAlarmHistoryIfAny(id);
+    },
+
+    async _refreshOpenAlarmHistoryIfAny(id: number) {
+      if (
+        this.entityHistoryFor?.kind === "alarm" &&
+        this.entityHistoryFor?.id === id
+      ) {
+        await this.refreshEntityHistory();
+      }
+    },
+
 // ------------------------------------------------------------------
 // 通用修改历史（M2.3 仪表 → M2.4 扩到 SIF + Project）
 //
@@ -656,6 +1121,11 @@ export const useStudioStore = defineStore("studio", {
           list = await invoke<AuditEntry[]>("list_project_history", {
             projectId: target.id,
             limit: 200,
+          });
+        } else if (target.kind === "alarm") {
+          list = await invoke<AuditEntry[]>("list_alarm_history", {
+            alarmId: target.id,
+            limit: 100,
           });
         }
         this.entityHistory = list ?? [];
@@ -751,9 +1221,11 @@ export const useStudioStore = defineStore("studio", {
       data?: string;
     }): Promise<Diagram> {
       const d = await invoke<Diagram>("create_diagram", { input });
-      if (this.diagramsByProject[input.projectId]) {
-        await this.listDiagrams(input.projectId);
-      }
+      // 建图时后端会自动配套创建 SIF（一张图 = 一个 SIF），同步刷新两处缓存
+      await Promise.all([
+        this.listDiagrams(input.projectId),
+        this.refreshSifSummary(),
+      ]);
       return d;
     },
 
@@ -779,9 +1251,15 @@ export const useStudioStore = defineStore("studio", {
       name: string;
       description?: string;
       silDesign?: string;
+      silVerified?: string;
       demandMode?: string;
       pfdavgTarget?: number | null;
       proofInterval?: number;
+      sensorArch?: string;
+      logicArch?: string;
+      finalArch?: string;
+      mttrHours?: number;
+      betaFactor?: number;
     }) {
       const s: SifBasic = await invoke("create_sif", { input });
       await this.refreshSifSummary();
@@ -802,6 +1280,11 @@ export const useStudioStore = defineStore("studio", {
         demandMode?: string;
         pfdavgTarget?: number | null;
         proofInterval?: number;
+        sensorArch?: string;
+        logicArch?: string;
+        finalArch?: string;
+        mttrHours?: number;
+        betaFactor?: number;
       },
     ) {
       const s: SifBasic = await invoke("update_sif", { id, input });

@@ -339,6 +339,12 @@ async fn sil_change_update_records_from_to() {
             demand_mode: "low".into(),
             pfdavg_target: Some(0.001),
             proof_interval: 12,
+        sensor_arch: "1oo1".into(),
+        logic_arch: "1oo1".into(),
+        final_arch: "1oo1".into(),
+        mttr_hours: 8.0,
+        beta_factor: 0.10,
+        ..Default::default()
         },
         "李工",
     )
@@ -433,5 +439,11 @@ fn sif_input_with_project(project_id: i64, code: &str) -> SifInput {
         demand_mode: "low".into(),
         pfdavg_target: Some(0.01),
         proof_interval: 12,
+    sensor_arch: "1oo1".into(),
+    logic_arch: "1oo1".into(),
+    final_arch: "1oo1".into(),
+    mttr_hours: 8.0,
+    beta_factor: 0.10,
+    ..Default::default()
     }
 }

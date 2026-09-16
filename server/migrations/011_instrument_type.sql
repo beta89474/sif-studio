@@ -1,0 +1,21 @@
+-- ===========================================================================
+-- 011_instrument_type.sql
+--
+-- IEC 61508-2 Route 1H 架构约束：区分 Type A / Type B 设备
+--   Type A：故障模式明确、故障行为可完全确定（如机械继电器、简单开关）
+--   Type B：复杂元件、含软件/智能电子（如 PLC、智能变送器）
+--
+-- SFF/HFT 架构约束表（IEC 61508-2 表 2 / 表 3）按设备类型不同：
+--   Type A, SFF<60% : HFT0=SIL1 HFT1=SIL2 HFT2=SIL3
+--   Type A, 60-<90  : HFT0=SIL2 HFT1=SIL3 HFT2=SIL4
+--   Type A, 90-<99  : HFT0=SIL3 HFT1=SIL4 HFT2=SIL4
+--   Type A, >=99    : HFT0=SIL3 HFT1=SIL4 HFT2=SIL4
+--   Type B, SFF<60% : HFT0=NA   HFT1=SIL1 HFT2=SIL2
+--   Type B, 60-<90  : HFT0=SIL1 HFT1=SIL2 HFT2=SIL3
+--   Type B, 90-<99  : HFT0=SIL2 HFT1=SIL3 HFT2=SIL4
+--   Type B, >=99    : HFT0=SIL3 HFT1=SIL4 HFT2=SIL4
+--
+-- 默认 type_b：SIS 现场仪表多为智能电子设备，取更保守的类型。
+-- ===========================================================================
+
+ALTER TABLE instrument ADD COLUMN equipment_type TEXT NOT NULL DEFAULT 'type_b';
